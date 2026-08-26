@@ -22,6 +22,10 @@ PORT="${PORT:-8099}"
 # The cluster runs arm64. Set ARCH=linux/arm64 to run this whole suite against
 # the arm64 image instead of the host's native one.
 ARCH="${ARCH:-}"
+# Set IMAGE to verify an already-published image instead of building from this
+# working tree, e.g. IMAGE=ghcr.io/jasonpulse/xiherald:latest to check that what
+# the cluster would pull actually serves pages.
+IMAGE="${IMAGE:-}"
 DBPASS=verify
 PASSES=0
 FAILURES=0
@@ -75,6 +79,7 @@ fi
 
 # The published workflow fails the build on either of these, so the local loop
 # checks them first rather than finding out from CI.
+if [[ -z "$IMAGE" ]]; then
 echo '== gofmt and vet'
 fmtout="$(docker run --rm -v "$ROOT":/src -w /src golang:1.24-alpine gofmt -l . || true)"
 if [[ -n "$fmtout" ]]; then
@@ -83,6 +88,7 @@ if [[ -n "$fmtout" ]]; then
     exit 1
 fi
 "$ROOT/tools/go.sh" vet ./...
+fi
 
 echo '== bringing up MariaDB'
 docker rm -f "$APP" "$DB" >/dev/null 2>&1 || true
@@ -119,11 +125,16 @@ GRANT SELECT ON xidb.* TO 'xiherald'@'%';
 FLUSH PRIVILEGES;
 GRANT
 
-echo "== building the herald image${ARCH:+ for $ARCH}"
-if [[ -n "$ARCH" ]]; then
+if [[ -n "$IMAGE" ]]; then
+    echo "== pulling $IMAGE${ARCH:+ ($ARCH)}"
+    docker pull ${ARCH:+--platform "$ARCH"} -q "$IMAGE" >/dev/null
+    docker tag "$IMAGE" xiherald:verify
+elif [[ -n "$ARCH" ]]; then
+    echo "== building the herald image for $ARCH"
     docker buildx build --builder "${BUILDER:-mybuilder}" --platform "$ARCH" \
         --provenance=false --load -t xiherald:verify "$ROOT" >/dev/null
 else
+    echo '== building the herald image'
     docker build -q -t xiherald:verify "$ROOT" >/dev/null
 fi
 echo "   image $(docker image inspect xiherald:verify --format '{{.Architecture}}')," \
