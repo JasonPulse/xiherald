@@ -1,0 +1,147 @@
+{{ define "content" }}
+{{ with .Data }}
+<section class="panel panel-ornate">
+  <h1 class="page-title">
+    {{ .Name }}
+    {{ if .Online }}<span class="live" title="Logged in now">&#9679;</span>{{ end }}
+  </h1>
+  {{ with .Title }}<p class="lede title-line">&ldquo;{{ . }}&rdquo;</p>{{ end }}
+
+  <dl class="facts">
+    <div><dt>Race</dt><dd>{{ .RaceName }}{{ with .RaceSex }} ({{ . }}){{ end }}</dd></div>
+    <div><dt>Nation</dt><dd><span class="nation n-{{ .NationSlug }}">{{ .NationName }}</span></dd></div>
+    <div><dt>Job</dt><dd>{{ .Job }}</dd></div>
+    <div><dt>Location</dt><dd>{{ or .Zone "Unknown" }}</dd></div>
+    <div><dt>Playtime</dt><dd>{{ .PlaytimeText }}</dd></div>
+    <div><dt>Created</dt><dd>{{ date .Created }}</dd></div>
+    <div><dt>Last seen</dt><dd>{{ if .Online }}online now{{ else }}{{ ago .LastLogout }}{{ end }}</dd></div>
+    <div><dt>Gil</dt><dd>{{ comma .Gil }}</dd></div>
+    <div><dt>Merits</dt><dd>{{ .Merits }} held</dd></div>
+    <div><dt>Limit points</dt><dd>{{ comma .Limits }}</dd></div>
+    {{ if gt .MasterLevel 0 }}
+    <div><dt>Master level</dt><dd>{{ .MasterLevel }} &middot; {{ comma .Exemplar }} EP</dd></div>
+    {{ end }}
+  </dl>
+</section>
+
+<section class="tiles">
+  <div class="tile"><span class="tile-n">{{ .JobsCapped }}</span><span class="tile-l">Jobs at 99</span></div>
+  <div class="tile"><span class="tile-n">{{ comma .TotalLevels }}</span><span class="tile-l">Total job levels</span></div>
+  <div class="tile"><span class="tile-n">{{ comma .Kills }}</span><span class="tile-l">Enemies defeated</span></div>
+  <div class="tile"><span class="tile-n">{{ comma .Deaths }}</span><span class="tile-l">Deaths</span></div>
+  <div class="tile"><span class="tile-n">{{ ratio .KD }}</span><span class="tile-l">K/D ratio</span></div>
+  <div class="tile"><span class="tile-n">{{ comma .RankPoints }}</span><span class="tile-l">Rank points</span></div>
+</section>
+
+<section class="panel">
+  <h2 class="section-title">Jobs</h2>
+  <div class="jobs">
+  {{ range .Jobs }}
+    <div class="job{{ if .Capped }} capped{{ end }}{{ if .IsMain }} is-main{{ end }}{{ if .IsSub }} is-sub{{ end }}">
+      <div class="job-head">
+        <span class="job-short">{{ .Short }}</span>
+        <span class="job-lvl">{{ if gt .Level 0 }}{{ .Level }}{{ else }}&mdash;{{ end }}</span>
+      </div>
+      <div class="bar"><span style="width:{{ pct .LevelPercent }}%"></span></div>
+      <div class="job-foot">
+        {{ if gt .JobPoints 0 }}{{ .JobPoints }} JP{{ else if gt .Exp 0 }}{{ comma .Exp }} xp{{ else }}&nbsp;{{ end }}
+      </div>
+    </div>
+  {{ end }}
+  </div>
+</section>
+
+{{ if .Skills }}
+<section class="panel">
+  <h2 class="section-title">Skills</h2>
+  {{ range .Skills }}
+    <h3 class="side-group">{{ .Group }}</h3>
+    <div class="scroller">
+      <table class="grid tight">
+        <tbody>
+        {{ range .Rows }}
+          <tr>
+            <td class="c-name">{{ .Name }}</td>
+            <td class="num strong">{{ .Display }}</td>
+            <td class="c-bar">
+              <div class="bar{{ if .AtCap }} full{{ end }}"><span style="width:{{ pct .Percent }}%"></span></div>
+            </td>
+            <td class="num dim">{{ if gt .Cap 0 }}cap {{ .CapDisplay }}{{ end }}</td>
+          </tr>
+        {{ end }}
+        </tbody>
+      </table>
+    </div>
+  {{ end }}
+</section>
+{{ end }}
+
+{{ if .Crafts }}
+<section class="panel">
+  <h2 class="section-title">Crafts</h2>
+  <div class="scroller">
+    <table class="grid tight">
+      <thead><tr><th>Craft</th><th class="num">Skill</th><th>Rank</th><th class="num">Guild points</th></tr></thead>
+      <tbody>
+      {{ range .Crafts }}
+        <tr>
+          <td class="c-name">{{ .Name }}</td>
+          <td class="num strong">{{ skill .Display }}</td>
+          <td>{{ .Rank }}</td>
+          <td class="num">{{ comma .Points }}</td>
+        </tr>
+      {{ end }}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{ end }}
+
+<div class="cols">
+  <section class="panel col-main">
+    <h2 class="section-title">Record</h2>
+    <div class="scroller">
+      <table class="grid tight">
+        <tbody>
+        {{ range .History }}
+          <tr>
+            <td class="c-name">{{ .Label }}</td>
+            <td class="num strong">{{ comma .Value }}{{ with .Unit }} <span class="dim">{{ . }}</span>{{ end }}</td>
+          </tr>
+        {{ end }}
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <aside class="panel col-side">
+    <h2 class="section-title">Standing</h2>
+    <div class="scroller">
+      <table class="grid tight">
+        <tbody>
+        {{ range .Ranks }}
+          <tr>
+            <td class="c-name"><span class="nation n-{{ .Slug }}">{{ .Nation }}</span></td>
+            <td class="num strong">Rank {{ .Rank }}</td>
+          </tr>
+        {{ end }}
+        </tbody>
+      </table>
+    </div>
+
+    {{ if .Fame }}
+    <h3 class="side-group">Fame</h3>
+    <div class="scroller">
+      <table class="grid tight">
+        <tbody>
+        {{ range .Fame }}
+          <tr><td class="c-name">{{ .Area }}</td><td class="num strong">{{ comma .Value }}</td></tr>
+        {{ end }}
+        </tbody>
+      </table>
+    </div>
+    {{ end }}
+  </aside>
+</div>
+{{ end }}
+{{ end }}

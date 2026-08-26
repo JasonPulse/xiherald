@@ -1,0 +1,81 @@
+# Reference only. See ../HANDOFF.md.
+# Every CHANGE_ME is an infrastructure decision this repo does not make.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: xiherald-db
+  namespace: CHANGE_ME
+type: Opaque
+stringData:
+  password: CHANGE_ME
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: xiherald
+  namespace: CHANGE_ME
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: xiherald
+  template:
+    metadata:
+      labels:
+        app: xiherald
+    spec:
+      containers:
+        - name: xiherald
+          image: ghcr.io/jasonpulse/xiherald:latest # pin a tag
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: XI_HERALD_DB_HOST
+              value: CHANGE_ME
+            - name: XI_HERALD_DB_NAME
+              value: xidb
+            - name: XI_HERALD_DB_USER
+              value: xiherald
+            - name: XI_HERALD_DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: xiherald-db
+                  key: password
+            - name: XI_HERALD_SERVER_NAME
+              value: Vana'diel
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /livez
+              port: http
+            periodSeconds: 30
+            failureThreshold: 6
+          resources:
+            requests:
+              cpu: 10m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: xiherald
+  namespace: CHANGE_ME
+spec:
+  selector:
+    app: xiherald
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

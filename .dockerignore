@@ -1,0 +1,9 @@
+.git
+.github
+.venv
+assets/raw
+assets/logo
+tools
+deploy
+README.md
+*.md

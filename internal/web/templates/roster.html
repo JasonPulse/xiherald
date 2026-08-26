@@ -1,0 +1,76 @@
+{{ define "content" }}
+{{ with .Data.Summary }}
+<section class="tiles">
+  <div class="tile"><span class="tile-n">{{ comma .Characters }}</span><span class="tile-l">Characters</span></div>
+  <div class="tile{{ if gt .Online 0 }} tile-live{{ end }}"><span class="tile-n">{{ .Online }}</span><span class="tile-l">Online now</span></div>
+  <div class="tile"><span class="tile-n">{{ comma .TotalKills }}</span><span class="tile-l">Enemies defeated</span></div>
+  <div class="tile"><span class="tile-n">{{ comma .TotalDeaths }}</span><span class="tile-l">Deaths</span></div>
+  <div class="tile"><span class="tile-n">{{ hours .TotalHours }}</span><span class="tile-l">Hours played</span></div>
+  <div class="tile"><span class="tile-n">{{ .JobsAt99 }}</span><span class="tile-l">Jobs at 99</span></div>
+</section>
+{{ end }}
+
+<section class="panel panel-ornate">
+  <h1 class="page-title">Roster</h1>
+  <p class="lede">Every character on {{ .ServerName }}. Click a name for the full record.</p>
+
+  <div class="sorts">
+    <span class="sorts-label">Sort by</span>
+    {{ $current := .Data.Sort }}
+    {{ range .Data.Sorts }}
+      <a href="/?sort={{ .Slug }}" class="chip{{ if eq .Slug $current }} on{{ end }}">{{ .Label }}</a>
+    {{ end }}
+  </div>
+</section>
+
+<section class="panel panel-wide">
+{{ if .Data.Rows }}
+  <div class="scroller">
+    <table class="grid">
+      <thead>
+        <tr>
+          <th class="c-rank">#</th>
+          <th>Character</th>
+          <th>Nation</th>
+          <th>Race</th>
+          <th>Job</th>
+          <th class="num">Jobs 99</th>
+          <th class="num">Levels</th>
+          <th class="num">Kills</th>
+          <th class="num">Deaths</th>
+          <th class="num">K/D</th>
+          <th class="num">Hours</th>
+          <th>Last seen</th>
+        </tr>
+      </thead>
+      <tbody>
+      {{ range $i, $r := .Data.Rows }}
+        <tr>
+          <td class="c-rank">{{ add $i 1 }}</td>
+          <td class="c-name">
+            <a href="/player/{{ $r.Name }}">{{ $r.Name }}</a>
+            {{ if $r.Online }}<span class="live" title="Logged in now">&#9679;</span>{{ end }}
+            {{ with $r.Title }}<span class="title-tag">{{ . }}</span>{{ end }}
+          </td>
+          <td><span class="nation n-{{ $r.NationSlug }}">{{ $r.NationName }}</span></td>
+          <td>{{ $r.RaceName }}{{ with $r.RaceSex }} <span class="dim">{{ . }}</span>{{ end }}</td>
+          <td class="c-job">{{ $r.Job }}</td>
+          <td class="num">{{ $r.JobsCapped }}</td>
+          <td class="num">{{ comma $r.TotalLevels }}</td>
+          <td class="num">{{ comma $r.Kills }}</td>
+          <td class="num">{{ comma $r.Deaths }}</td>
+          <td class="num">{{ ratio $r.KD }}</td>
+          <td class="num">{{ hours $r.PlaytimeHours }}</td>
+          <td class="dim">
+            {{ if $r.Online }}in {{ or $r.Zone "an unknown zone" }}{{ else }}{{ ago $r.LastLogout }}{{ end }}
+          </td>
+        </tr>
+      {{ end }}
+      </tbody>
+    </table>
+  </div>
+{{ else }}
+  <p class="empty">No characters yet. Nobody has logged in.</p>
+{{ end }}
+</section>
+{{ end }}

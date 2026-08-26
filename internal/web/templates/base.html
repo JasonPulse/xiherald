@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>{{ .Title }} &middot; FFXI Herald</title>
+<link rel="icon" type="image/png" href="/static/img/favicon.png">
+<link rel="stylesheet" href="/static/css/herald.css">
+</head>
+<body>
+
+<header class="hero">
+  <a class="hero-logo" href="/">
+    <img src="/static/img/logo-banner.jpg" alt="FFXI Herald">
+  </a>
+  <p class="hero-sub">{{ .ServerName }} &middot; player statistics</p>
+</header>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="/" class="{{ if eq .Section "roster" }}on{{ end }}">Roster</a>
+    <a href="/stats" class="{{ if eq .Section "stats" }}on{{ end }}">Fun stats</a>
+  </div>
+</nav>
+
+<main class="wrap">
+{{ block "content" . }}{{ end }}
+</main>
+
+<footer class="foot">
+  <div class="rule" role="presentation"></div>
+  <p>FFXI Herald reads the game database directly. Numbers are as the server
+     recorded them.</p>
+</footer>
+
+</body>
+</html>

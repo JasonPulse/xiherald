@@ -1,0 +1,56 @@
+{{ define "content" }}
+<section class="panel panel-ornate">
+  <h1 class="page-title">{{ .Data.Metric.Label }}</h1>
+  <p class="lede">{{ .Data.Metric.Blurb }}</p>
+</section>
+
+<div class="cols">
+  <section class="panel panel-wide col-main">
+  {{ if .Data.Rows }}
+    <div class="scroller">
+      <table class="grid">
+        <thead>
+          <tr>
+            <th class="c-rank">#</th>
+            <th>Character</th>
+            <th>Nation</th>
+            <th>Job</th>
+            <th class="num">{{ .Data.Metric.Label }}{{ with .Data.Metric.Unit }} <span class="dim">({{ . }})</span>{{ end }}</th>
+          </tr>
+        </thead>
+        <tbody>
+        {{ $f := .Data.Metric.Format }}
+        {{ range .Data.Rows }}
+          <tr{{ if le .Rank 3 }} class="podium p{{ .Rank }}"{{ end }}>
+            <td class="c-rank">{{ .Rank }}</td>
+            <td class="c-name">
+              <a href="/player/{{ .Name }}">{{ .Name }}</a>
+              {{ if .Online }}<span class="live" title="Logged in now">&#9679;</span>{{ end }}
+            </td>
+            <td><span class="nation n-{{ .NationSlug }}">{{ .NationName }}</span></td>
+            <td class="c-job">{{ .JobText }}</td>
+            <td class="num strong">{{ value $f .Value }}</td>
+          </tr>
+        {{ end }}
+        </tbody>
+      </table>
+    </div>
+  {{ else }}
+    <p class="empty">Nobody has scored on this board yet.</p>
+  {{ end }}
+  </section>
+
+  <aside class="panel col-side">
+    <h2 class="section-title">Other boards</h2>
+    {{ $slug := .Data.Metric.Slug }}
+    {{ range .Data.Groups }}
+      <h3 class="side-group">{{ .Name }}</h3>
+      <ul class="side-list">
+      {{ range .Metrics }}
+        <li><a href="/stats/{{ .Slug }}" class="{{ if eq .Slug $slug }}on{{ end }}">{{ .Label }}</a></li>
+      {{ end }}
+      </ul>
+    {{ end }}
+  </aside>
+</div>
+{{ end }}

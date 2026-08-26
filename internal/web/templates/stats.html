@@ -1,0 +1,21 @@
+{{ define "content" }}
+<section class="panel panel-ornate">
+  <h1 class="page-title">Fun stats</h1>
+  <p class="lede">Every counter below comes straight out of the game database.
+     Nothing here is estimated.</p>
+</section>
+
+{{ range .Data.Groups }}
+<section class="panel">
+  <h2 class="section-title">{{ .Name }}</h2>
+  <ul class="metric-list">
+  {{ range .Metrics }}
+    <li>
+      <a href="/stats/{{ .Slug }}">{{ .Label }}</a>
+      <span class="blurb">{{ .Blurb }}</span>
+    </li>
+  {{ end }}
+  </ul>
+</section>
+{{ end }}
+{{ end }}
