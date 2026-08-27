@@ -24,9 +24,21 @@ type Config struct {
 	DBName string
 }
 
-// DSN builds a go-sql-driver connection string. The Herald only ever reads,
-// so the session is pinned read-only and to a short lock wait: a leaderboard
-// query must never be the reason the game server waits on a row.
+// DSN builds a go-sql-driver connection string.
+//
+// Only driver options and portable server variables belong here. Anything the
+// driver puts in this string is applied with SET on every new connection, so an
+// unknown variable name does not degrade, it kills the connection outright and
+// every page 500s.
+//
+// That is why there is no isolation level here. MariaDB spells it tx_isolation
+// until 11.1 and transaction_isolation from 11.1 on, and picking either one
+// breaks the Herald on the other. The Herald issues single autocommit SELECTs,
+// where the isolation level changes nothing worth the portability cost.
+//
+// innodb_lock_wait_timeout stays: it has existed since MySQL 5.5, and it is the
+// guarantee that a leaderboard query is never why the game server waits on a
+// row.
 func (c Config) DSN() string {
 	params := url.Values{}
 	params.Set("parseTime", "true")
@@ -34,7 +46,6 @@ func (c Config) DSN() string {
 	params.Set("collation", "utf8mb4_general_ci")
 	params.Set("timeout", "5s")
 	params.Set("readTimeout", "15s")
-	params.Set("transaction_isolation", "'READ-COMMITTED'")
 	params.Set("innodb_lock_wait_timeout", "5")
 
 	return fmt.Sprintf("%s:%s@tcp(%s:%d)/%s?%s",

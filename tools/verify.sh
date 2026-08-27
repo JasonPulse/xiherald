@@ -26,6 +26,10 @@ ARCH="${ARCH:-}"
 # working tree, e.g. IMAGE=ghcr.io/jasonpulse/xiherald:latest to check that what
 # the cluster would pull actually serves pages.
 IMAGE="${IMAGE:-}"
+# The server version is a real variable in this system: MariaDB renamed
+# transaction_isolation in 11.1, and testing only against :11 once hid a bug
+# that broke every page on an older server. Default low, override to sweep.
+MARIADB_TAG="${MARIADB_TAG:-10.11}"
 DBPASS=verify
 PASSES=0
 FAILURES=0
@@ -90,7 +94,7 @@ fi
 "$ROOT/tools/go.sh" vet ./...
 fi
 
-echo '== bringing up MariaDB'
+echo "== bringing up MariaDB $MARIADB_TAG"
 docker rm -f "$APP" "$DB" >/dev/null 2>&1 || true
 docker network rm "$NET" >/dev/null 2>&1 || true
 docker network create "$NET" >/dev/null
@@ -98,7 +102,7 @@ docker network create "$NET" >/dev/null
 docker run -d --name "$DB" --network "$NET" \
     -e MARIADB_ROOT_PASSWORD="$DBPASS" \
     -e MARIADB_DATABASE=xidb \
-    mariadb:11 >/dev/null
+    "mariadb:$MARIADB_TAG" >/dev/null
 
 for _ in $(seq 1 60); do
     if docker exec "$DB" mariadb -uroot -p"$DBPASS" -e 'SELECT 1' >/dev/null 2>&1; then
