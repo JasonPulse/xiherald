@@ -294,6 +294,54 @@ for traced in panel-ornate.png panel-plain.png button.png rule.png seal.png; do
     check "no licensed asset: $traced" "$code" '404'
 done
 
+
+# ---- JSON API ------------------------------------------------------------
+# Consumed by a public-facing guild site, so the contract is asserted rather
+# than assumed: stable field names, arrays never null, and no gil anywhere.
+
+apiidx="$(curl -fsS "http://localhost:$PORT/api/v1")"
+check 'api index lists characters'   "$apiidx" '/api/v1/characters'
+check 'api index states no gil'      "$apiidx" 'Gil is not exposed'
+
+apilist="$(curl -fsS "http://localhost:$PORT/api/v1/characters")"
+check 'api lists characters'         "$apilist" '"name": "Aldwyn"'
+check 'api reports a count'          "$apilist" '"count": 5'
+check 'api names the nation'         "$apilist" "\"nation\": \"San d'Oria\""
+check 'api gives kd as a number'     "$apilist" '"kill_death_ratio":'
+check 'api deaths use knockouts'     "$apilist" '"deaths": 812'
+refute 'api omits the unnamed slot'  "$apilist" '"name": ""'
+
+apichar="$(curl -fsS "http://localhost:$PORT/api/v1/characters/Aldwyn")"
+check 'api character has jobs'       "$apichar" '"abbrev": "SAM"'
+check 'api character has skills'     "$apichar" '"name": "Great Katana"'
+check 'api flattens skill groups'    "$apichar" '"group": "Combat"'
+check 'api character has crafts'     "$apichar" '"rank": "Veteran"'
+check 'api character has history'    "$apichar" '"distance_travelled": 18402913'
+check 'api character has fame'       "$apichar" '"area": "San d'"'"'Oria"'
+
+# Gil is on the private HTML page and must not reach the API.
+for doc in "$apilist" "$apichar"; do
+    refute 'api never exposes gil' "$doc" 'gil'
+done
+refute 'api never exposes a gil figure' "$apichar" '48210934'
+
+apiboards="$(curl -fsS "http://localhost:$PORT/api/v1/leaderboards")"
+check 'api lists leaderboards'       "$apiboards" '"slug": "deaths"'
+refute 'api dropped the duplicate'   "$apiboards" '"slug": "knockouts"'
+
+apiboard="$(curl -fsS "http://localhost:$PORT/api/v1/leaderboards/kills")"
+check 'api board is ranked'          "$apiboard" '"rank": 1'
+check 'api board carries values'     "$apiboard" '"value": 148902'
+
+apisum="$(curl -fsS "http://localhost:$PORT/api/v1/summary")"
+check 'api summary counts characters' "$apisum" '"characters": 5'
+check 'api summary uses knockouts'    "$apisum" '"total_deaths": 1125'
+
+apimiss="$(curl -sS -o /dev/null -w '%{http_code}' "http://localhost:$PORT/api/v1/characters/Nobody")"
+check 'api unknown character is 404' "$apimiss" '404'
+apijson="$(curl -fsS -D - -o /dev/null "http://localhost:$PORT/api/v1/summary")"
+check 'api serves json'              "$apijson" 'application/json'
+
 echo
 echo "== $PASSES passed, $FAILURES failed"
 

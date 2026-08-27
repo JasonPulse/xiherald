@@ -129,6 +129,8 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /stats/{$}", s.statsIndex)
 	s.mux.HandleFunc("GET /stats", s.statsIndex)
 	s.mux.HandleFunc("GET /stats/{metric}", s.leaderboard)
+
+	s.apiRoutes()
 }
 
 // staticCache caches by whether the URL identifies its contents.

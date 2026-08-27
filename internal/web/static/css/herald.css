@@ -366,6 +366,28 @@ a:hover { color: var(--crystal-lit); text-decoration: underline; }
 .grid .c-job { font-variant-numeric: tabular-nums; color: var(--text); white-space: nowrap; }
 .grid .c-bar { width: 34%; min-width: 90px; }
 
+/* One table for every skill group, so the four columns line up across them.
+   Rendering a table per group let each compute its own widths, which left the
+   defensive block sitting inboard of the combat block above it. */
+.skills { table-layout: fixed; }
+.skills .col-skill { width: 34%; }
+.skills .col-value { width: 12%; }
+.skills .col-bar   { width: 40%; }
+.skills .col-cap   { width: 14%; }
+
+.skills .grouprow th {
+  padding: 16px 10px 6px;
+  text-align: left;
+  font-size: 0.76rem;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--brass);
+  border-bottom: 1px solid var(--line-faint);
+}
+
+.skills tbody:first-child .grouprow th { padding-top: 4px; }
+
 .podium .c-rank { color: var(--brass-bright); }
 .podium.p1 { background: linear-gradient(90deg, rgba(232,211,170,0.10), transparent); }
 .podium.p2 { background: linear-gradient(90deg, rgba(194,165,120,0.07), transparent); }

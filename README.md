@@ -30,6 +30,45 @@ at 99, master level, merits, rank points and job points.
 Adding a board is one entry in `Metrics` in `internal/xidb/leaders.go`. The
 query, the page, the stats index and the sidebar all read from that registry.
 
+## JSON API
+
+For other tools in the cluster. Read-only, no auth, same trust boundary as the
+pages.
+
+```
+GET /api/v1                        endpoint index and caveats
+GET /api/v1/summary                server-wide counters
+GET /api/v1/characters             every character, ?sort= as the roster
+GET /api/v1/characters/{name}      one character in full
+GET /api/v1/leaderboards           the metric registry
+GET /api/v1/leaderboards/{metric}  one board, ranked
+```
+
+The response types are defined separately from the internal query structs on
+purpose. They are a published contract: renaming a Go field or reordering a
+query must not silently break a consumer. Arrays are always arrays and never
+`null`, so a caller iterating results needs no empty-server special case.
+
+**Gil is not exposed by this API.** It is on the HTML character page, which is
+private. The known consumer is a public-facing guild site, and gil is the one
+number here that becomes a griefing target the moment it leaves a private
+network. If something genuinely needs it, that should be a deliberate change
+rather than a field discovered by accident.
+
+Consume it server-side, from inside the cluster:
+
+```
+http://xiherald.homelab.svc.cluster.local/api/v1/characters
+```
+
+No CORS headers are sent, because a public visitor's browser cannot reach the
+Herald and a public site fetching this client-side would not work anyway. If you
+ever do want browser-side access from another origin, that needs a deliberate
+CORS decision, not a header added quietly.
+
+Version the path, not the fields. `v1` field meanings are stable; a breaking
+change gets `v2`.
+
 ## Running it
 
 The Herald connects straight to the game database as a read-only user. No game

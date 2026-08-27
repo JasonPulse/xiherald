@@ -54,25 +54,28 @@
 {{ if .Skills }}
 <section class="panel">
   <h2 class="section-title">Skills</h2>
-  {{ range .Skills }}
-    <h3 class="side-group">{{ .Group }}</h3>
-    <div class="scroller">
-      <table class="grid tight">
-        <tbody>
+  <div class="scroller">
+    <table class="grid tight skills">
+      <colgroup>
+        <col class="col-skill"><col class="col-value"><col class="col-bar"><col class="col-cap">
+      </colgroup>
+      {{ range .Skills }}
+      <tbody>
+        <tr class="grouprow"><th colspan="4">{{ .Group }}</th></tr>
         {{ range .Rows }}
-          <tr>
-            <td class="c-name">{{ .Name }}</td>
-            <td class="num strong">{{ .Display }}</td>
-            <td class="c-bar">
-              <div class="bar{{ if .AtCap }} full{{ end }}"><span style="width:{{ pct .Percent }}%"></span></div>
-            </td>
-            <td class="num dim">{{ if gt .Cap 0 }}cap {{ .CapDisplay }}{{ end }}</td>
-          </tr>
+        <tr>
+          <td class="c-name">{{ .Name }}</td>
+          <td class="num strong">{{ .Display }}</td>
+          <td class="c-bar">
+            <div class="bar{{ if .AtCap }} full{{ end }}"><span style="width:{{ pct .Percent }}%"></span></div>
+          </td>
+          <td class="num dim">{{ if gt .Cap 0 }}cap {{ .CapDisplay }}{{ end }}</td>
+        </tr>
         {{ end }}
-        </tbody>
-      </table>
-    </div>
-  {{ end }}
+      </tbody>
+      {{ end }}
+    </table>
+  </div>
 </section>
 {{ end }}
 
