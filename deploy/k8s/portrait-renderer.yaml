@@ -1,0 +1,55 @@
+# Reference only. See ../HANDOFF.md.
+# Every CHANGE_ME is an infrastructure decision this repo does not make.
+#
+# The renderer image contains retail game data and must come from a PRIVATE
+# registry. It is built on a workstation by tools/portraits/build_image.sh,
+# because the DAT archives are gitignored out of every repository and CI has no
+# access to them.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: xiherald-portraits
+  namespace: CHANGE_ME
+spec:
+  # Portraits only change when somebody changes gear, so this is cheap and
+  # infrequent. Every run skips characters whose appearance hash is unmoved.
+  schedule: "17 4 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 1
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          restartPolicy: Never
+          imagePullSecrets:
+            - name: CHANGE_ME
+          containers:
+            - name: renderer
+              image: CHANGE_ME/vellichor-renderer:latest
+              args:
+                - --herald
+                - http://xiherald
+                - --db-host
+                - CHANGE_ME
+              env:
+                - name: XI_PORTRAIT_DB_USER
+                  value: xiherald
+                - name: XI_PORTRAIT_DB_NAME
+                  value: xiportraits
+                - name: XI_PORTRAIT_DB_PASS
+                  valueFrom:
+                    secretKeyRef:
+                      name: CHANGE_ME
+                      key: password
+              resources:
+                requests:
+                  cpu: 500m
+                  memory: 1Gi
+                limits:
+                  memory: 3Gi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]

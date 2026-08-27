@@ -51,14 +51,63 @@ secret, nothing to secure if the site is ever put behind a tunnel. Its rights
 are asymmetric on purpose, full control of `xiportraits` and `SELECT` only on
 `xidb`, and the test suite asserts both halves.
 
-```bash
-pip install -r tools/portraits/requirements.txt
+### Running the renderer
 
-XI_PORTRAIT_DB_PASS=... ./tools/portraits/render_portraits.py \
-    --herald http://localhost:8080 \
+It runs **in the cluster**, not on a workstation, so nothing depends on a
+desktop being awake. That needs the DATs in-cluster, and a portrait only ever
+touches skeletons, faces and equipment models: **454 MiB, 4.3% of the 10.3 GiB
+corpus**. Small enough to bake into the image.
+
+The subset is complete rather than demand-driven. It covers every face, every
+skeleton and every equipment model id for all eight races, so it never needs
+re-extracting when somebody equips something new. A demand-driven subset would
+be a third the size and would break the first time gear changed.
+
+Build the image where the archives are:
+
+```bash
+tools/portraits/build_image.sh \
     --vellichor ~/Code/Godot/Vellichor \
-    --godot /Applications/Godot_mono.app/Contents/MacOS/Godot
+    --tag youruser/vellichor-renderer:latest \
+    --platform linux/arm64 --push
 ```
+
+**That image contains retail game data. The registry must be private.** It
+cannot be built in CI, because the archives are gitignored out of every
+repository by design. Rebuild it only when Vellichor or the DAT subset changes,
+not per render.
+
+Then schedule it: `deploy/k8s/portrait-renderer.yaml` is a reference CronJob.
+Each run reads `/api/v1/appearances` and re-renders only the characters whose
+appearance hash has moved.
+
+To render from a workstation instead, `--kubectl` reads the password from the
+Herald's own secret and manages its own port-forwards:
+
+```bash
+tools/portraits/render_portraits.py --kubectl --vellichor ~/Code/Godot/Vellichor
+```
+
+### Three things that only break on Linux
+
+Worth recording, because all three produced a plausible-looking failure rather
+than an error.
+
+**`ModelResolver.Abs` uppercases the extension.** The JSON tables spell paths
+`.dat` and `Abs` looks up `.DAT`. On a case-insensitive filesystem that is
+invisible; on Linux every lookup misses and the renderer draws an empty scene
+while logging one line. `extract_corpus.py` writes the `.DAT` form.
+
+**Vulkan through llvmpipe aborts on arm64.** `LLVM ERROR: Cannot select
+AArch64ISD::VLSHR` while compiling a shader, with LLVM 15 as shipped in
+bookworm. The renderer uses `--rendering-driver opengl3`, which takes a
+different shader path and works. This is not a preference; Forward+ crashes.
+
+**Vellichor must build its own C# assembly.** A plain `dotnet build` produces a
+dll Godot will not load, failing with "Cannot instantiate C# script" at runtime.
+The image runs `godot --import` then `--build-solutions`, and asserts
+`Vellichor.dll` exists so the build fails at its cause rather than at a
+confusing runtime error.
 
 The `portraits` table is created by whichever of the Herald or the renderer runs
 first; both issue the same `CREATE TABLE IF NOT EXISTS`, so there is no

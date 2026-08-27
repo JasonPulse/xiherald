@@ -34,8 +34,19 @@ so there is no file to back up and no upload endpoint to secure.
 The hash already stored beside each portrait is the cache: a character whose
 appearance has not moved is skipped without rendering.
 
-Requires PyMySQL (see requirements.txt) and, if the database is in-cluster, a
-port-forward to it.
+This runs on the workstation, because that is where Vellichor and the retail
+DAT archives are. Nothing about the renderer belongs in the cluster: only the
+finished PNGs go there, into the portrait database.
+
+With --kubectl it manages that gap itself. It reads the database password from
+the Herald's own Kubernetes secret using the local kubectl, opens port-forwards
+to MariaDB and to the Herald on free local ports, renders, and tears them down.
+That makes the whole job one command with no credentials to paste and no
+tunnels to babysit:
+
+    ./render_portraits.py --kubectl --vellichor ~/Code/Godot/Vellichor
+
+Requires PyMySQL (see requirements.txt).
 """
 
 import argparse
@@ -44,10 +55,80 @@ import os
 import shutil
 import subprocess
 import sys
+import atexit
+import contextlib
+import socket
 import tempfile
+import time
 import urllib.request
 
 import pymysql
+
+
+def free_port():
+    with socket.socket() as sock:
+        sock.bind(("127.0.0.1", 0))
+        return sock.getsockname()[1]
+
+
+def kubectl(args, *rest, capture=True):
+    cmd = ["kubectl"]
+    if args.kube_context:
+        cmd += ["--context", args.kube_context]
+    cmd += ["-n", args.kube_namespace, *rest]
+    return subprocess.run(cmd, capture_output=capture, text=True, check=True)
+
+
+def secret_value(args):
+    """Read the database password from the Herald's secret.
+
+    Deliberately fetched with the operator's own kubectl rather than being
+    passed in on a command line, so the password never lands in shell history
+    or in a file.
+    """
+    out = kubectl(args, "get", "secret", args.kube_secret,
+                  "-o", f"jsonpath={{.data.{args.kube_secret_key}}}").stdout
+    if not out.strip():
+        raise SystemExit(f"secret {args.kube_secret}/{args.kube_secret_key} is empty")
+    import base64
+    return base64.b64decode(out).decode()
+
+
+def wait_for_port(port, timeout=20):
+    deadline = time.time() + timeout
+    while time.time() < deadline:
+        with contextlib.suppress(OSError):
+            with socket.create_connection(("127.0.0.1", port), timeout=1):
+                return True
+        time.sleep(0.3)
+    return False
+
+
+@contextlib.contextmanager
+def port_forward(args, target, remote_port):
+    """Hold a kubectl port-forward open for the duration of the block."""
+    local = free_port()
+    cmd = ["kubectl"]
+    if args.kube_context:
+        cmd += ["--context", args.kube_context]
+    cmd += ["-n", args.kube_namespace, "port-forward", target,
+            f"{local}:{remote_port}"]
+
+    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL,
+                            stderr=subprocess.PIPE, text=True)
+    # Registered as well as finally-closed, so a hard exit still cleans up.
+    atexit.register(proc.terminate)
+
+    try:
+        if not wait_for_port(local):
+            proc.terminate()
+            err = (proc.stderr.read() if proc.stderr else "").strip()
+            raise SystemExit(f"port-forward to {target} never came up: {err}")
+        yield local
+    finally:
+        proc.terminate()
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            proc.wait(timeout=5)
 
 
 def fetch_appearances(herald):
@@ -177,7 +258,16 @@ def postprocess(path, args):
 
 def main():
     ap = argparse.ArgumentParser()
-    ap.add_argument("--herald", required=True, help="Herald base URL")
+    ap.add_argument("--herald", help="Herald base URL; implied by --kubectl")
+    ap.add_argument("--kubectl", action="store_true",
+                    help="read the password from the Herald secret and manage "
+                         "port-forwards automatically")
+    ap.add_argument("--kube-context", default=os.environ.get("XI_KUBE_CONTEXT", "pulse-clift"))
+    ap.add_argument("--kube-namespace", default=os.environ.get("XI_KUBE_NAMESPACE", "homelab"))
+    ap.add_argument("--kube-secret", default="xiherald-db")
+    ap.add_argument("--kube-secret-key", default="password")
+    ap.add_argument("--kube-db-service", default="svc/mariadb-service")
+    ap.add_argument("--kube-herald", default="deploy/xiherald")
     ap.add_argument("--vellichor", required=True, help="path to the Vellichor project")
     ap.add_argument("--db-host", default=os.environ.get("XI_PORTRAIT_DB_HOST", "127.0.0.1"))
     ap.add_argument("--db-port", type=int, default=int(os.environ.get("XI_PORTRAIT_DB_PORT", "3306")))
@@ -187,7 +277,10 @@ def main():
     ap.add_argument("--keep", help="also keep the PNGs in this directory")
     ap.add_argument("--godot", default=os.environ.get("GODOT", "godot"))
     ap.add_argument("--driver", default="opengl3",
-                    help="Godot rendering driver; opengl3 works under xvfb")
+                    help="Godot rendering driver. opengl3 is not a preference: "
+                         "on arm64 the Vulkan path through llvmpipe aborts with "
+                         "an LLVM 'Cannot select AArch64ISD::VLSHR' shader "
+                         "compile failure, and the cluster has no GPU.")
     ap.add_argument("--width", type=int, default=512)
     ap.add_argument("--height", type=int, default=768)
     ap.add_argument("--portrait-width", type=int, default=384)
@@ -208,7 +301,29 @@ def main():
     if not args.db_schema.replace("_", "").isalnum():
         sys.exit(f"refusing to use {args.db_schema!r} as a schema name")
 
-    conn = connect(args)
+    if not args.kubectl and not args.herald:
+        sys.exit("--herald is required unless --kubectl is given")
+
+    if args.kubectl:
+        return run_tunnelled(args)
+
+    return run(args, connect(args))
+
+
+def run_tunnelled(args):
+    """Open both tunnels, fill in the connection details, then run normally."""
+    args.db_pass = args.db_pass or secret_value(args)
+
+    with port_forward(args, args.kube_db_service, 3306) as db_port, \
+         port_forward(args, args.kube_herald, 8080) as herald_port:
+        args.db_host = "127.0.0.1"
+        args.db_port = db_port
+        args.herald = args.herald or f"http://127.0.0.1:{herald_port}"
+        print(f"tunnels up: db :{db_port}, herald :{herald_port}")
+        return run(args, connect(args))
+
+
+def run(args, conn):
     appearances = fetch_appearances(args.herald)
     stored = {} if args.force else stored_hashes(conn, args.db_schema)
 
