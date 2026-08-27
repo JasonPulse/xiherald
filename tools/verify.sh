@@ -229,6 +229,33 @@ check 'player page shows fame'          "$player" '9,999'
 check 'player page shows the record'    "$player" 'Distance travelled'
 check 'player page shows job points'    "$player" '1204 JP'
 
+# ---- missions -------------------------------------------------------------
+# chars.missions is a raw missionlog_t[15] blob. The fixture encodes one by
+# hand, so these numbers exercise the decoder rather than echo it: a nation log
+# mid-chain, an expansion log finished, a ToAU mission in progress, CoP whose
+# completion is linear off current, and SoA whose ids exceed the 64-slot array.
+check 'nation mission in progress'   "$player" 'The Heir to the Light'
+check 'nation log counts completions' "$player" '23 / 24'
+check 'toau mission shows its number' "$player" 'ToAU 41'
+check 'toau mission shows its name'   "$player" 'Path of Darkness'
+check 'toau counts completions'       "$player" '41 / 48'
+check 'a finished log says complete'  "$player" 'Complete'
+check 'zilart is finished'            "$player" '18 / 18'
+# CoP ids are large and non-sequential, so this also proves the id is read as
+# a mission id and not as an ordinal.
+check 'cop completion is linear'      "$player" '20 / 43'
+# SoA has ids past 64, which take the linear branch while lower ids use the bits.
+check 'soa mixes both rules'          "$player" '55 / 105'
+
+apimissions="$(curl -fsS "http://localhost:$PORT/api/v1/characters/Aldwyn")"
+check 'api reports the toau log'      "$apimissions" '"short": "ToAU"'
+check 'api reports current id'        "$apimissions" '"current_id": 41'
+check 'api reports current name'      "$apimissions" '"current": "Path of Darkness"'
+check 'api reports completed'         "$apimissions" '"completed": 41'
+check 'api reports total'             "$apimissions" '"total": 48'
+check 'api marks a finished log'      "$apimissions" '"finished": true'
+check 'api reports every log'         "$apimissions" '"log": "Wings of the Goddess"'
+
 fresh="$(curl -fsS "http://localhost:$PORT/player/Neverwas")"
 check 'a never-played character renders' "$fresh" 'Neverwas'
 refute 'and does not divide by zero'     "$fresh" 'NaN'

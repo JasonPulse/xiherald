@@ -116,6 +116,20 @@ type apiFame struct {
 	Value int    `json:"value"`
 }
 
+type apiMission struct {
+	Log            string `json:"log"`
+	LogID          int    `json:"log_id"`
+	Short          string `json:"short"`
+	CurrentID      int    `json:"current_id,omitempty"`
+	Current        string `json:"current,omitempty"`
+	HasCurrent     bool   `json:"has_current"`
+	LastCompleteID int    `json:"last_complete_id,omitempty"`
+	LastComplete   string `json:"last_complete,omitempty"`
+	Completed      int    `json:"completed"`
+	Total          int    `json:"total"`
+	Finished       bool   `json:"finished"`
+}
+
 type apiCharacterDetail struct {
 	apiCharacter
 
@@ -129,6 +143,7 @@ type apiCharacterDetail struct {
 	Jobs        []apiJob        `json:"jobs"`
 	Skills      []apiSkill      `json:"skills"`
 	Crafts      []apiCraft      `json:"crafts"`
+	Missions    []apiMission    `json:"missions"`
 	History     map[string]int  `json:"history"`
 }
 
@@ -248,6 +263,7 @@ func (s *Server) apiIndex(w http.ResponseWriter, r *http.Request) {
 			"Characters with a blank name are unfinished slots and are never listed.",
 			"deaths is char_history.times_knocked_out; char_stats.death is a weakness timer, not a tally.",
 			"Skill values and caps are the numbers the game displays. Craft skill carries one decimal.",
+			"Mission has_current is authoritative: the no-mission sentinel is 65535 for nation logs and 0 for expansion logs.",
 		},
 	})
 }
@@ -323,6 +339,7 @@ func (s *Server) apiCharacter(w http.ResponseWriter, r *http.Request) {
 		Jobs:           make([]apiJob, 0, len(p.Jobs)),
 		Skills:         make([]apiSkill, 0),
 		Crafts:         make([]apiCraft, 0, len(p.Crafts)),
+		Missions:       make([]apiMission, 0, len(p.Missions)),
 		History:        map[string]int{},
 	}
 
@@ -353,6 +370,17 @@ func (s *Server) apiCharacter(w http.ResponseWriter, r *http.Request) {
 	for _, c := range p.Crafts {
 		detail.Crafts = append(detail.Crafts, apiCraft{
 			Name: c.Name, Skill: c.Display(), Rank: c.Rank, GuildPoints: c.Points,
+		})
+	}
+	// Every log is reported, including untouched ones, because a consumer
+	// filtering for "has this character finished CoP" should not have to infer
+	// absence from a missing key.
+	for _, m := range p.Missions {
+		detail.Missions = append(detail.Missions, apiMission{
+			Log: m.Log.Label, LogID: m.Log.LogID, Short: m.Log.Short,
+			CurrentID: m.CurrentID, Current: m.Current, HasCurrent: m.HasCurrent,
+			LastCompleteID: m.LastDoneID, LastComplete: m.LastDone,
+			Completed: m.Completed, Total: m.Total, Finished: m.Finished(),
 		})
 	}
 	for i, h := range p.History {

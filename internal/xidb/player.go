@@ -20,10 +20,23 @@ type Player struct {
 	Ranks      []NationRank
 	Fame       []FameEntry
 
-	Jobs    []JobRow
-	Skills  []SkillBucket
-	History []HistoryStat
-	Crafts  []CraftRow
+	Jobs     []JobRow
+	Skills   []SkillBucket
+	History  []HistoryStat
+	Crafts   []CraftRow
+	Missions []MissionProgress
+}
+
+// StartedMissions is the subset worth rendering: a log nobody has touched is
+// noise on a character page.
+func (p *Player) StartedMissions() []MissionProgress {
+	out := make([]MissionProgress, 0, len(p.Missions))
+	for _, m := range p.Missions {
+		if m.Started() {
+			out = append(out, m)
+		}
+	}
+	return out
 }
 
 type NationRank struct {
@@ -175,6 +188,9 @@ func (db *DB) Player(ctx context.Context, name string) (*Player, error) {
 			return nil, err
 		}
 		if err := db.loadHistory(ctx, p); err != nil {
+			return nil, err
+		}
+		if err := db.loadMissions(ctx, p); err != nil {
 			return nil, err
 		}
 		return p, nil
@@ -444,6 +460,19 @@ func (db *DB) loadHistory(ctx context.Context, p *Player) error {
 			Label: h.Label, Value: values[i], Unit: h.Unit,
 		})
 	}
+	return nil
+}
+
+func (db *DB) loadMissions(ctx context.Context, p *Player) error {
+	var blob []byte
+
+	err := db.sql.QueryRowContext(ctx,
+		`SELECT missions FROM chars WHERE charid = ?`, p.CharID).Scan(&blob)
+	if err != nil && !isNoRows(err) {
+		return fmt.Errorf("player missions: %w", err)
+	}
+
+	p.Missions = decodeMissions(blob)
 	return nil
 }
 

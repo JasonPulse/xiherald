@@ -79,6 +79,46 @@
 </section>
 {{ end }}
 
+{{ with .StartedMissions }}
+<section class="panel">
+  <h2 class="section-title">Missions</h2>
+  <div class="scroller">
+    <table class="grid tight missions">
+      <colgroup>
+        <col class="col-exp"><col class="col-standing"><col class="col-bar"><col class="col-count">
+      </colgroup>
+      <thead>
+        <tr><th>Expansion</th><th>Standing</th><th>Progress</th><th class="num">Done</th></tr>
+      </thead>
+      <tbody>
+      {{ range . }}
+        <tr>
+          <td class="c-name">{{ .Log.Label }}</td>
+          <td class="c-standing">
+            {{ if .HasCurrent }}
+              <span class="mission-cur">{{ .Log.Short }} {{ .CurrentID }}</span>
+              {{ with .Current }}<span class="mission-name">{{ . }}</span>{{ end }}
+            {{ else if .Finished }}
+              <span class="mission-done">Complete</span>
+            {{ else if .HasLastDone }}
+              <span class="mission-cur">{{ .Log.Short }} {{ .LastDoneID }}</span>
+              {{ with .LastDone }}<span class="mission-name">{{ . }}</span>{{ end }}
+            {{ else }}
+              <span class="dim">not started</span>
+            {{ end }}
+          </td>
+          <td class="c-bar">
+            <div class="bar{{ if .Finished }} full{{ end }}"><span style="width:{{ pct .Percent }}%"></span></div>
+          </td>
+          <td class="num dim">{{ if gt .Total 0 }}{{ .Completed }} / {{ .Total }}{{ end }}</td>
+        </tr>
+      {{ end }}
+      </tbody>
+    </table>
+  </div>
+</section>
+{{ end }}
+
 {{ if .Crafts }}
 <section class="panel">
   <h2 class="section-title">Crafts</h2>
