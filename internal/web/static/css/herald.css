@@ -542,6 +542,42 @@ a:hover { color: var(--crystal-lit); text-decoration: underline; }
 .side-list li { padding: 3px 0; }
 .side-list a.on { color: var(--brass-bright); font-weight: 600; }
 
+/* ------------------------------------------------------------ portrait */
+
+/* The portrait sits beside the identity facts and collapses out of the layout
+   when it fails to load, so a character nobody has rendered yet looks
+   deliberate rather than broken. */
+.ident {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 26px;
+  align-items: start;
+}
+
+.ident > .facts { margin-top: 0; }
+
+.portrait {
+  margin: 18px 0 0;
+  padding: 6px;
+  width: 208px;
+  background: rgba(0,0,0,0.45);
+  border: 1px solid var(--line-soft);
+}
+
+.portrait img {
+  display: block;
+  width: 100%;
+  height: auto;
+  background:
+    radial-gradient(120% 90% at 50% 8%, rgba(93,166,199,0.20), transparent 70%),
+    linear-gradient(180deg, #16202b, #0b0d12);
+}
+
+@media (max-width: 760px) {
+  .ident { grid-template-columns: 1fr; gap: 12px; }
+  .portrait { width: 168px; margin: 12px auto 0; }
+}
+
 /* --------------------------------------------------------------- facts */
 
 .facts {

@@ -19,6 +19,11 @@ GRANT SELECT ON xidb.char_profile     TO 'xiherald'@'%';
 GRANT SELECT ON xidb.char_points      TO 'xiherald'@'%';
 GRANT SELECT ON xidb.char_history     TO 'xiherald'@'%';
 
+-- Appearance. char_look (granted above) holds model ids; char_style holds item
+-- ids, mapped through item_equipment.MId when the character is style-locked.
+GRANT SELECT ON xidb.char_style       TO 'xiherald'@'%';
+GRANT SELECT (itemId, MId) ON xidb.item_equipment TO 'xiherald'@'%';
+
 -- Reference tables for skill caps and zone names.
 GRANT SELECT ON xidb.skill_caps       TO 'xiherald'@'%';
 GRANT SELECT ON xidb.zone_settings    TO 'xiherald'@'%';

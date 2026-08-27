@@ -47,7 +47,13 @@ func run(log *slog.Logger) error {
 		log.Info("database connected", "host", cfg.DBHost, "db", cfg.DBName)
 	}
 
-	srv, err := web.New(db, cfg.ServerName, log)
+	if cfg.PortraitBaseURL == "" {
+		log.Info("portraits disabled, set XI_HERALD_PORTRAIT_BASE_URL to enable")
+	} else {
+		log.Info("portraits enabled", "base", cfg.PortraitBaseURL)
+	}
+
+	srv, err := web.New(db, cfg.ServerName, cfg.PortraitBaseURL, log)
 	if err != nil {
 		return err
 	}

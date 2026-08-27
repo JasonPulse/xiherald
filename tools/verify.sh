@@ -39,7 +39,7 @@ FAILURES=0
 TABLES=(
     chars char_stats char_look char_history char_jobs char_exp
     char_job_points char_profile char_points char_skills char_inventory
-    skill_caps zone_settings accounts_sessions
+    char_style item_equipment skill_caps zone_settings accounts_sessions
 )
 
 cleanup() {
@@ -351,6 +351,31 @@ for doc in "$apilist" "$apichar"; do
     refute 'api never exposes gil' "$doc" 'gil'
 done
 refute 'api never exposes a gil figure' "$apichar" '48210934'
+
+# ---- appearances ----------------------------------------------------------
+# The render work-list. char_look holds model ids, char_style holds item ids
+# that only mean anything after item_equipment.MId, and the two must not be
+# confused: Aldwyn is style-locked in the fixture with different items to his
+# real gear, so these numbers prove which source was used.
+apilook="$(curl -fsS "http://localhost:$PORT/api/v1/appearances")"
+check 'appearances are listed'        "$apilook" '"appearances"'
+check 'appearance names the race'     "$apilook" '"race_name": "Elvaan"'
+check 'appearance carries a hash'     "$apilook" '"hash":'
+check 'appearance builds an equip arg' "$apilook" '"equip_arg":'
+refute 'unnamed slots are excluded'   "$apilook" '"name": "",'
+
+# Aldwyn: style-locked, so head must be the model behind the style item (250)
+# and not the raw char_look value (98).
+check 'style lock resolves via MId'   "$apilook" '"head": 323'
+refute 'style lock ignores raw look'  "$apilook" '"head": 98'
+check 'style lock is reported'        "$apilook" '"style_locked": true'
+
+# Muunbeam: not style-locked, so char_look wins even though a style row exists.
+check 'style lock body via MId'       "$apilook" '"body": 5'
+check 'unlocked look is used'         "$apilook" '"body": 61'
+
+look1="$(curl -fsS "http://localhost:$PORT/api/v1/characters/Aldwyn")"
+check 'character carries appearance'  "$look1" '"appearance":'
 
 apiboards="$(curl -fsS "http://localhost:$PORT/api/v1/leaderboards")"
 check 'api lists leaderboards'       "$apiboards" '"slug": "deaths"'

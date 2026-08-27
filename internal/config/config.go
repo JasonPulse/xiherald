@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"strconv"
+	"strings"
 	"time"
 )
 
@@ -16,6 +17,12 @@ type Config struct {
 	Addr       string
 	ServerName string
 	CacheTTL   time.Duration
+
+	// PortraitBaseURL is where rendered character portraits are served from.
+	// Empty disables portraits entirely, which is the default: the Herald
+	// cannot render them itself and must not show broken images when nothing
+	// has rendered them yet.
+	PortraitBaseURL string
 
 	DBHost string
 	DBPort int
@@ -57,11 +64,13 @@ func Load() Config {
 		Addr:       env("XI_HERALD_ADDR", ":8080"),
 		ServerName: env("XI_HERALD_SERVER_NAME", "Vana'diel"),
 		CacheTTL:   envDuration("XI_HERALD_CACHE_TTL", 30*time.Second),
-		DBHost:     env("XI_HERALD_DB_HOST", "127.0.0.1"),
-		DBPort:     envInt("XI_HERALD_DB_PORT", 3306),
-		DBUser:     env("XI_HERALD_DB_USER", "xiherald"),
-		DBPass:     env("XI_HERALD_DB_PASS", ""),
-		DBName:     env("XI_HERALD_DB_NAME", "xidb"),
+		PortraitBaseURL: strings.TrimSuffix(
+			env("XI_HERALD_PORTRAIT_BASE_URL", ""), "/"),
+		DBHost: env("XI_HERALD_DB_HOST", "127.0.0.1"),
+		DBPort: envInt("XI_HERALD_DB_PORT", 3306),
+		DBUser: env("XI_HERALD_DB_USER", "xiherald"),
+		DBPass: env("XI_HERALD_DB_PASS", ""),
+		DBName: env("XI_HERALD_DB_NAME", "xidb"),
 	}
 }
 

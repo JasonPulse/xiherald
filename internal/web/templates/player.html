@@ -7,6 +7,14 @@
   </h1>
   {{ with .Title }}<p class="lede title-line">&ldquo;{{ . }}&rdquo;</p>{{ end }}
 
+  <div class="ident">
+  {{ with $.PortraitBase }}
+    <figure class="portrait">
+      <img src="{{ . }}/{{ $.Data.CharID }}.png" alt="{{ $.Data.Name }}"
+           loading="lazy" onerror="this.closest('.portrait').remove()">
+    </figure>
+  {{ end }}
+
   <dl class="facts">
     <div><dt>Race</dt><dd>{{ .RaceName }}{{ with .RaceSex }} ({{ . }}){{ end }}</dd></div>
     <div><dt>Nation</dt><dd><span class="nation n-{{ .NationSlug }}">{{ .NationName }}</span></dd></div>
@@ -22,6 +30,7 @@
     <div><dt>Master level</dt><dd>{{ .MasterLevel }} &middot; {{ comma .Exemplar }} EP</dd></div>
     {{ end }}
   </dl>
+  </div>
 </section>
 
 <section class="tiles">

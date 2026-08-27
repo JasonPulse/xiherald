@@ -31,6 +31,66 @@ at 99, master level, merits, rank points and job points.
 Adding a board is one entry in `Metrics` in `internal/xidb/leaders.go`. The
 query, the page, the stats index and the sidebar all read from that registry.
 
+## Character portraits
+
+Rendered character models with worn gear, in the spirit of the FFXIV Lodestone.
+
+The Herald does not render them. Rendering needs the retail DAT archives, which
+are not redistributable and run to about 10 GB, so it happens wherever those
+archives already are and the Herald only links to the result. It stores no
+images and stays stateless.
+
+**Vellichor does the rendering.** It already had everything needed:
+`ModelResolver.PcRecipe(EntityLook)` assembles a PC from a look vector whose
+fields are exactly `char_look`'s, and `VELLICHOR_SHOT` writes the viewport to a
+PNG. `tools/portraits/render_portraits.py` is the work-list and the caching
+around it. About 1.5 seconds per character.
+
+```bash
+./tools/portraits/render_portraits.py \
+    --herald http://xiherald.homelab.svc.cluster.local \
+    --vellichor ~/Code/Godot/Vellichor \
+    --out ./portraits \
+    --godot /Applications/Godot_mono.app/Contents/MacOS/Godot
+```
+
+Then serve `./portraits` over HTTP and point the Herald at it:
+
+```
+XI_HERALD_PORTRAIT_BASE_URL=https://portraits.example/xi
+```
+
+Portraits are **off** until that is set. The Herald cannot produce them, so
+showing a broken image for every character by default would be worse than
+showing none. A portrait that fails to load removes itself from the layout, so a
+character nobody has rendered yet looks deliberate.
+
+### Appearance resolution
+
+`GET /api/v1/appearances` is the render work-list. It resolves the appearance
+rather than dumping the tables, because two sources are involved and they are
+not interchangeable:
+
+- `char_look` holds **model** ids per visible slot. The normal case.
+- `char_style` holds **item** ids, and applies when `chars.isstylelocked` is
+  set. The server compares those values using `HasItem`
+  (`charutils.cpp:1961`), which is what gives them away as item ids.
+
+So a style-locked character's slots are mapped through `item_equipment.MId` to
+get model ids. Rendering `char_style`'s raw values as models would silently
+dress everybody in the wrong gear, and it would look plausible.
+
+Each entry carries a `hash` of the resolved appearance. The renderer keeps the
+hash it last drew and skips unchanged characters, which is the difference
+between re-rendering a hundred people every run and re-rendering the two who
+changed gear.
+
+### Background
+
+Renders use `VELLICHOR_MAGENTA` for a flat background that is keyed to
+transparency, so the backdrop comes from CSS. Restyling it costs nothing;
+baking a background into the PNGs would mean re-rendering everyone.
+
 ## Mission decoding
 
 `chars.missions` is a raw dump of `missionlog_t[15]` from the server's

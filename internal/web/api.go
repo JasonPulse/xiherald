@@ -143,8 +143,26 @@ type apiCharacterDetail struct {
 	Jobs        []apiJob        `json:"jobs"`
 	Skills      []apiSkill      `json:"skills"`
 	Crafts      []apiCraft      `json:"crafts"`
+	Appearance  *apiAppearance  `json:"appearance,omitempty"`
 	Missions    []apiMission    `json:"missions"`
 	History     map[string]int  `json:"history"`
+}
+
+// apiAppearance is the render work-list entry. models is keyed by slot name so
+// a renderer does not have to know the positional order, and equip_arg is the
+// same data pre-joined into the form Vellichor's VELLICHOR_PC_EQUIP takes.
+type apiAppearance struct {
+	CharacterID int            `json:"character_id"`
+	Name        string         `json:"name"`
+	Race        int            `json:"race"`
+	RaceName    string         `json:"race_name"`
+	Face        int            `json:"face"`
+	Size        int            `json:"size"`
+	StyleLocked bool           `json:"style_locked"`
+	Models      map[string]int `json:"models"`
+	EquipArg    string         `json:"equip_arg"`
+	Hash        string         `json:"hash"`
+	Renderable  bool           `json:"renderable"`
 }
 
 type apiMetric struct {
@@ -219,6 +237,7 @@ func (s *Server) apiRoutes() {
 	s.mux.HandleFunc("GET "+base+"/summary", s.apiSummary)
 	s.mux.HandleFunc("GET "+base+"/characters", s.apiCharacters)
 	s.mux.HandleFunc("GET "+base+"/characters/{name}", s.apiCharacter)
+	s.mux.HandleFunc("GET "+base+"/appearances", s.apiAppearances)
 	s.mux.HandleFunc("GET "+base+"/leaderboards", s.apiMetrics)
 	s.mux.HandleFunc("GET "+base+"/leaderboards/{metric}", s.apiLeaderboard)
 }
@@ -264,6 +283,8 @@ func (s *Server) apiIndex(w http.ResponseWriter, r *http.Request) {
 			"deaths is char_history.times_knocked_out; char_stats.death is a weakness timer, not a tally.",
 			"Skill values and caps are the numbers the game displays. Craft skill carries one decimal.",
 			"Mission has_current is authoritative: the no-mission sentinel is 65535 for nation logs and 0 for expansion logs.",
+			"Appearance models are resolved: char_look holds model ids, char_style holds item ids mapped through item_equipment.MId when style-locked.",
+			"Poll appearances and re-render only where hash changed.",
 		},
 	})
 }
@@ -387,7 +408,52 @@ func (s *Server) apiCharacter(w http.ResponseWriter, r *http.Request) {
 		detail.History[xidb.HistoryColumns[i].Column] = h.Value
 	}
 
+	if look, err := s.db.AppearanceOf(r.Context(), p.Name); err == nil {
+		a := toAPIAppearance(look)
+		detail.Appearance = &a
+	}
+
 	s.writeJSON(w, r, http.StatusOK, detail)
+}
+
+func toAPIAppearance(a xidb.Appearance) apiAppearance {
+	models := make(map[string]int, len(xidb.AppearanceSlots))
+	for i, slot := range xidb.AppearanceSlots {
+		models[slot] = a.Models[i]
+	}
+
+	return apiAppearance{
+		CharacterID: a.CharID,
+		Name:        a.Name,
+		Race:        a.Race,
+		RaceName:    a.RaceName(),
+		Face:        a.Face,
+		Size:        a.Size,
+		StyleLocked: a.StyleLocked,
+		Models:      models,
+		EquipArg:    a.EquipArg(),
+		Hash:        a.Hash(),
+		Renderable:  a.Renderable(),
+	}
+}
+
+func (s *Server) apiAppearances(w http.ResponseWriter, r *http.Request) {
+	list, err := s.db.Appearances(r.Context())
+	if err != nil {
+		s.log.Error("api appearances failed", "err", err)
+		s.apiError(w, r, http.StatusServiceUnavailable, "database unavailable")
+		return
+	}
+
+	out := make([]apiAppearance, 0, len(list))
+	for _, a := range list {
+		out = append(out, toAPIAppearance(a))
+	}
+
+	s.writeJSON(w, r, http.StatusOK, map[string]any{
+		"count":       len(out),
+		"appearances": out,
+	})
 }
 
 func (s *Server) apiMetrics(w http.ResponseWriter, r *http.Request) {

@@ -27,11 +27,12 @@ var templateFS embed.FS
 var staticFS embed.FS
 
 type Server struct {
-	db         *xidb.DB
-	pages      map[string]*template.Template
-	log        *slog.Logger
-	serverName string
-	mux        *http.ServeMux
+	db           *xidb.DB
+	pages        map[string]*template.Template
+	log          *slog.Logger
+	serverName   string
+	portraitBase string
+	mux          *http.ServeMux
 }
 
 // assetVersions maps a static path to a short hash of its contents. Templates
@@ -84,10 +85,14 @@ type page struct {
 	ServerName string
 	Title      string
 	Section    string
-	Data       any
+	// PortraitBase is empty when no renderer is configured, which is what the
+	// templates key off to omit portraits entirely rather than show a broken
+	// image for every character.
+	PortraitBase string
+	Data         any
 }
 
-func New(db *xidb.DB, serverName string, log *slog.Logger) (*Server, error) {
+func New(db *xidb.DB, serverName, portraitBase string, log *slog.Logger) (*Server, error) {
 	static, err := fs.Sub(staticFS, "static")
 	if err != nil {
 		return nil, fmt.Errorf("static subtree: %w", err)
@@ -108,7 +113,8 @@ func New(db *xidb.DB, serverName string, log *slog.Logger) (*Server, error) {
 		pages[name] = set
 	}
 
-	s := &Server{db: db, pages: pages, log: log, serverName: serverName, mux: http.NewServeMux()}
+	s := &Server{db: db, pages: pages, log: log, serverName: serverName,
+		portraitBase: portraitBase, mux: http.NewServeMux()}
 	s.routes()
 	return s, nil
 }
@@ -279,6 +285,7 @@ func (s *Server) leaderboard(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, p page) {
 	p.ServerName = s.serverName
+	p.PortraitBase = s.portraitBase
 
 	set, ok := s.pages[name]
 	if !ok {
