@@ -66,13 +66,14 @@ be a third the size and would break the first time gear changed.
 Build the image where the archives are:
 
 ```bash
-tools/portraits/build_image.sh \
-    --vellichor ~/Code/Godot/Vellichor \
-    --tag youruser/vellichor-renderer:latest \
-    --platform linux/arm64 --push
+docker login
+tools/portraits/build_image.sh --vellichor ~/Code/Godot/Vellichor --push
 ```
 
-**That image contains retail game data. The registry must be private.** It
+Defaults to `jasonpulse/vellichor-renderer:latest` and `linux/arm64`.
+
+**That image contains retail game data, so the Docker Hub repository must be
+private.** It
 cannot be built in CI, because the archives are gitignored out of every
 repository by design. Rebuild it only when Vellichor or the DAT subset changes,
 not per render.

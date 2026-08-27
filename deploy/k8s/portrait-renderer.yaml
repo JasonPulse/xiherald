@@ -27,7 +27,7 @@ spec:
             - name: CHANGE_ME
           containers:
             - name: renderer
-              image: CHANGE_ME/vellichor-renderer:latest
+              image: jasonpulse/vellichor-renderer:latest
               args:
                 - --herald
                 - http://xiherald

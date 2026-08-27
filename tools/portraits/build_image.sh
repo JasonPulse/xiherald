@@ -7,14 +7,17 @@
 #
 # The result contains game data. Push it to a PRIVATE registry only.
 #
-#   ./build_image.sh --vellichor ~/Code/Godot/Vellichor \
-#                    --tag yourname/vellichor-renderer:latest --push
+#   docker login
+#   ./build_image.sh --vellichor ~/Code/Godot/Vellichor --push
+#
+# The default tag is jasonpulse/vellichor-renderer:latest. That Docker Hub
+# repository must be PRIVATE: the image carries retail game data.
 #
 set -euo pipefail
 
 HERE="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VELLICHOR=""
-TAG="vellichor-renderer:local"
+TAG="jasonpulse/vellichor-renderer:latest"
 PLATFORM="linux/arm64"
 PUSH=0
 BUILDER="${BUILDER:-mybuilder}"
