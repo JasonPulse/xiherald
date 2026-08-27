@@ -23,7 +23,7 @@ if [[ ! -f "$CORPUS/VTABLE.DAT" && ! -f "$CORPUS/ROM/VTABLE.DAT" ]]; then
 fi
 
 exec xvfb-run -a -s "-screen 0 ${XI_RENDER_RESOLUTION:-512x768}x24" \
-    python3 /app/render_portraits.py \
+    python3 -u /app/render_portraits.py \
         --vellichor /app/vellichor \
         --godot /usr/local/bin/godot \
         "$@"

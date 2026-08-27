@@ -327,6 +327,11 @@ def run(args, conn):
     appearances = fetch_appearances(args.herald)
     stored = {} if args.force else stored_hashes(conn, args.db_schema)
 
+    todo = sum(1 for a in appearances
+               if a["renderable"] and stored.get(str(a["character_id"])) != a["hash"])
+    print(f"{len(appearances)} characters, {len(stored)} already stored, "
+          f"{todo} to render")
+
     if args.keep:
         os.makedirs(args.keep, exist_ok=True)
     work_dir = args.keep or tempfile.mkdtemp(prefix="xi-portraits-")
@@ -353,7 +358,9 @@ def run(args, conn):
             break
 
         style = " (style-locked)" if a["style_locked"] else ""
-        print(f"  render {a['name']} [{a['race_name']}]{style}")
+        # Numbered, so a stalled run is obvious from the log alone.
+        print(f"  [{rendered + failed + 1}/{todo}] render {a['name']} "
+              f"[{a['race_name']}]{style}")
 
         ok, err = render_one(args, a, dest)
         if not ok:

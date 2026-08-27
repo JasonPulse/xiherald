@@ -67,7 +67,11 @@ FROM mcr.microsoft.com/dotnet/runtime:8.0
 ARG GODOT_VERSION
 ARG TARGETARCH
 
-ENV DEBIAN_FRONTEND=noninteractive \
+# Unbuffered, because Python block-buffers stdout when it is not a tty. In a
+# Job that means no log output at all until the process exits, so a run that is
+# working normally is indistinguishable from one that is hung.
+ENV PYTHONUNBUFFERED=1 \
+    DEBIAN_FRONTEND=noninteractive \
     LIBGL_ALWAYS_SOFTWARE=1 \
     GALLIUM_DRIVER=llvmpipe \
     XDG_RUNTIME_DIR=/tmp/runtime \
