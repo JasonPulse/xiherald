@@ -295,7 +295,8 @@ def main():
     ap.add_argument("--timeout", type=int, default=180)
     ap.add_argument("--only", help="render just this character name")
     ap.add_argument("--force", action="store_true", help="ignore the manifest")
-    ap.add_argument("--limit", type=int, help="stop after this many renders")
+    ap.add_argument("--limit", type=int,
+                    help="stop after this many render attempts, successful or not")
     args = ap.parse_args()
 
     if not args.db_schema.replace("_", "").isalnum():
@@ -354,7 +355,7 @@ def run(args, conn):
             skipped += 1
             continue
 
-        if args.limit is not None and rendered >= args.limit:
+        if args.limit is not None and (rendered + failed) >= args.limit:
             break
 
         style = " (style-locked)" if a["style_locked"] else ""

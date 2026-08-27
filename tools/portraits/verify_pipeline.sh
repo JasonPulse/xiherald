@@ -57,6 +57,9 @@ docker image inspect "$IMAGE" >/dev/null 2>&1 || {
 }
 
 echo "== bringing up MariaDB $MARIADB_TAG"
+# A previous run killed with SIGKILL leaves its trap unfired, so anything still
+# attached to the network has to go before the network itself can be removed.
+docker ps -aq --filter "network=$NET" | xargs -r docker rm -f >/dev/null 2>&1 || true
 docker rm -f "$APP" "$DB" >/dev/null 2>&1 || true
 docker network rm "$NET" >/dev/null 2>&1 || true
 docker network create "$NET" >/dev/null
