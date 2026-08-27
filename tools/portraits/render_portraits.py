@@ -27,8 +27,15 @@ normal run costs nothing for the characters who have not changed gear.
                           --vellichor ~/Code/Godot/Vellichor \
                           --out ./portraits
 
-Nothing here writes to the Herald. Point a web server at --out, then set
-XI_HERALD_PORTRAIT_BASE_URL to its URL.
+Rendered PNGs are written into the portrait database, which the Herald reads
+and serves. Nothing is written to the Herald itself and nothing is left on disk,
+so there is no file to back up and no upload endpoint to secure.
+
+The hash already stored beside each portrait is the cache: a character whose
+appearance has not moved is skipped without rendering.
+
+Requires PyMySQL (see requirements.txt) and, if the database is in-cluster, a
+port-forward to it.
 """
 
 import argparse
@@ -37,9 +44,10 @@ import os
 import shutil
 import subprocess
 import sys
+import tempfile
 import urllib.request
 
-MANIFEST = "manifest.json"
+import pymysql
 
 
 def fetch_appearances(herald):
@@ -48,26 +56,61 @@ def fetch_appearances(herald):
         return json.load(r)["appearances"]
 
 
-def load_manifest(out_dir):
-    path = os.path.join(out_dir, MANIFEST)
-    if not os.path.exists(path):
-        return {}
-    try:
-        with open(path, encoding="utf-8") as fh:
-            return json.load(fh)
-    except (json.JSONDecodeError, OSError):
-        # A corrupt manifest costs a full re-render, which is recoverable.
-        # Refusing to run because of it is not.
-        print("manifest unreadable, re-rendering everything", file=sys.stderr)
-        return {}
+SCHEMA_DDL = """CREATE TABLE IF NOT EXISTS {schema}.portraits (
+  charid       int(10) unsigned NOT NULL,
+  hash         varchar(32)      NOT NULL,
+  content_type varchar(32)      NOT NULL DEFAULT 'image/png',
+  width        smallint(5) unsigned NOT NULL DEFAULT 0,
+  height       smallint(5) unsigned NOT NULL DEFAULT 0,
+  bytes        mediumblob       NOT NULL,
+  rendered_at  timestamp        NOT NULL DEFAULT CURRENT_TIMESTAMP
+                                ON UPDATE CURRENT_TIMESTAMP,
+  PRIMARY KEY (charid)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci"""
 
 
-def save_manifest(out_dir, manifest):
-    path = os.path.join(out_dir, MANIFEST)
-    tmp = path + ".tmp"
-    with open(tmp, "w", encoding="utf-8") as fh:
-        json.dump(manifest, fh, indent=2, sort_keys=True)
-    os.replace(tmp, path)
+def connect(args):
+    """Open the portrait database and make sure the table exists.
+
+    The Herald creates this table too. Both are CREATE TABLE IF NOT EXISTS with
+    the same definition, so whichever runs first wins and neither depends on
+    the other having run.
+    """
+    conn = pymysql.connect(
+        host=args.db_host, port=args.db_port, user=args.db_user,
+        password=args.db_pass, autocommit=True, connect_timeout=10)
+    with conn.cursor() as cur:
+        cur.execute(SCHEMA_DDL.format(schema=args.db_schema))
+    return conn
+
+
+def stored_hashes(conn, schema):
+    with conn.cursor() as cur:
+        cur.execute(f"SELECT charid, hash FROM {schema}.portraits")
+        return {str(cid): h for cid, h in cur.fetchall()}
+
+
+def store_portrait(conn, schema, char_id, appearance_hash, path):
+    with open(path, "rb") as fh:
+        blob = fh.read()
+
+    width = height = 0
+    # PNG header: 8-byte signature, then IHDR length+type, then w/h big-endian.
+    if len(blob) >= 24 and blob[:8] == b"\x89PNG\r\n\x1a\n":
+        width = int.from_bytes(blob[16:20], "big")
+        height = int.from_bytes(blob[20:24], "big")
+
+    with conn.cursor() as cur:
+        cur.execute(
+            f"""INSERT INTO {schema}.portraits
+                    (charid, hash, content_type, width, height, bytes)
+                VALUES (%s, %s, 'image/png', %s, %s, %s)
+                ON DUPLICATE KEY UPDATE
+                    hash = VALUES(hash), width = VALUES(width),
+                    height = VALUES(height), bytes = VALUES(bytes)""",
+            (char_id, appearance_hash, width, height, blob))
+
+    return len(blob), width, height
 
 
 def render_one(args, appearance, dest):
@@ -136,7 +179,12 @@ def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--herald", required=True, help="Herald base URL")
     ap.add_argument("--vellichor", required=True, help="path to the Vellichor project")
-    ap.add_argument("--out", required=True, help="directory to write PNGs into")
+    ap.add_argument("--db-host", default=os.environ.get("XI_PORTRAIT_DB_HOST", "127.0.0.1"))
+    ap.add_argument("--db-port", type=int, default=int(os.environ.get("XI_PORTRAIT_DB_PORT", "3306")))
+    ap.add_argument("--db-user", default=os.environ.get("XI_PORTRAIT_DB_USER", "xiherald"))
+    ap.add_argument("--db-pass", default=os.environ.get("XI_PORTRAIT_DB_PASS", ""))
+    ap.add_argument("--db-schema", default=os.environ.get("XI_PORTRAIT_DB_NAME", "xiportraits"))
+    ap.add_argument("--keep", help="also keep the PNGs in this directory")
     ap.add_argument("--godot", default=os.environ.get("GODOT", "godot"))
     ap.add_argument("--driver", default="opengl3",
                     help="Godot rendering driver; opengl3 works under xvfb")
@@ -157,10 +205,16 @@ def main():
     ap.add_argument("--limit", type=int, help="stop after this many renders")
     args = ap.parse_args()
 
-    os.makedirs(args.out, exist_ok=True)
+    if not args.db_schema.replace("_", "").isalnum():
+        sys.exit(f"refusing to use {args.db_schema!r} as a schema name")
 
+    conn = connect(args)
     appearances = fetch_appearances(args.herald)
-    manifest = {} if args.force else load_manifest(args.out)
+    stored = {} if args.force else stored_hashes(conn, args.db_schema)
+
+    if args.keep:
+        os.makedirs(args.keep, exist_ok=True)
+    work_dir = args.keep or tempfile.mkdtemp(prefix="xi-portraits-")
 
     rendered = skipped = failed = unrenderable = 0
 
@@ -169,14 +223,14 @@ def main():
             continue
 
         key = str(a["character_id"])
-        dest = os.path.join(args.out, key + ".png")
+        dest = os.path.join(work_dir, key + ".png")
 
         if not a["renderable"]:
             print(f"  skip   {a['name']}: no appearance data")
             unrenderable += 1
             continue
 
-        if manifest.get(key) == a["hash"] and os.path.exists(dest):
+        if stored.get(key) == a["hash"]:
             skipped += 1
             continue
 
@@ -193,12 +247,23 @@ def main():
             continue
 
         postprocess(dest, args)
-        manifest[key] = a["hash"]
-        rendered += 1
-        # Written every time so an interrupted run keeps what it finished.
-        save_manifest(args.out, manifest)
 
-    save_manifest(args.out, manifest)
+        try:
+            size, w, h = store_portrait(conn, args.db_schema,
+                                        a["character_id"], a["hash"], dest)
+        except pymysql.Error as err:
+            print(f"  FAIL   {a['name']}: store failed: {err}", file=sys.stderr)
+            failed += 1
+            continue
+
+        # Stored one at a time, so an interrupted run keeps what it finished.
+        print(f"         stored {w}x{h}, {size // 1024} KiB")
+        rendered += 1
+
+        if not args.keep:
+            os.unlink(dest)
+
+    conn.close()
 
     print(f"\nrendered {rendered}, unchanged {skipped}, "
           f"no data {unrenderable}, failed {failed}")

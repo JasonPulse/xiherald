@@ -8,10 +8,11 @@
   {{ with .Title }}<p class="lede title-line">&ldquo;{{ . }}&rdquo;</p>{{ end }}
 
   <div class="ident">
-  {{ with $.PortraitBase }}
+  {{ with $.PortraitHash }}
     <figure class="portrait">
-      <img src="{{ . }}/{{ $.Data.CharID }}.png" alt="{{ $.Data.Name }}"
-           loading="lazy" onerror="this.closest('.portrait').remove()">
+      <img src="/portraits/{{ $.Data.CharID }}.png?v={{ . }}"
+           alt="{{ $.Data.Name }}" loading="lazy"
+           onerror="this.closest('.portrait').remove()">
     </figure>
   {{ end }}
 

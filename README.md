@@ -36,34 +36,55 @@ query, the page, the stats index and the sidebar all read from that registry.
 Rendered character models with worn gear, in the spirit of the FFXIV Lodestone.
 
 The Herald does not render them. Rendering needs the retail DAT archives, which
-are not redistributable and run to about 10 GB, so it happens wherever those
-archives already are and the Herald only links to the result. It stores no
-images and stays stateless.
-
-**Vellichor does the rendering.** It already had everything needed:
+are not redistributable and run to about 12 GB, so it happens wherever those
+archives already are. **Vellichor** does the work; it already had every piece:
 `ModelResolver.PcRecipe(EntityLook)` assembles a PC from a look vector whose
 fields are exactly `char_look`'s, and `VELLICHOR_SHOT` writes the viewport to a
-PNG. `tools/portraits/render_portraits.py` is the work-list and the caching
-around it. About 1.5 seconds per character.
+PNG. About 1.5 seconds per character.
+
+Storage is a separate database, `xiportraits`, holding one row per character.
+Nothing lands on disk, so there is no file to back up and no volume to provision.
+
+**The renderer writes to that database directly, not through the Herald.** The
+Herald therefore has no network write path at all: no upload endpoint, no shared
+secret, nothing to secure if the site is ever put behind a tunnel. Its rights
+are asymmetric on purpose, full control of `xiportraits` and `SELECT` only on
+`xidb`, and the test suite asserts both halves.
 
 ```bash
-./tools/portraits/render_portraits.py \
-    --herald http://xiherald.homelab.svc.cluster.local \
+pip install -r tools/portraits/requirements.txt
+
+XI_PORTRAIT_DB_PASS=... ./tools/portraits/render_portraits.py \
+    --herald http://localhost:8080 \
     --vellichor ~/Code/Godot/Vellichor \
-    --out ./portraits \
     --godot /Applications/Godot_mono.app/Contents/MacOS/Godot
 ```
 
-Then serve `./portraits` over HTTP and point the Herald at it:
+The `portraits` table is created by whichever of the Herald or the renderer runs
+first; both issue the same `CREATE TABLE IF NOT EXISTS`, so there is no
+migration step and no ordering requirement.
 
-```
-XI_HERALD_PORTRAIT_BASE_URL=https://portraits.example/xi
-```
+Set `XI_HERALD_PORTRAIT_SCHEMA=""` to switch portraits off. A schema that is
+missing or unreachable is a warning, not a failed start: every page renders
+without portraits.
 
-Portraits are **off** until that is set. The Herald cannot produce them, so
-showing a broken image for every character by default would be worse than
-showing none. A portrait that fails to load removes itself from the layout, so a
-character nobody has rendered yet looks deliberate.
+### Caching
+
+Portrait URLs carry the hash of the **stored** image, not of the current
+appearance. That distinction matters. Using the appearance hash would mint a new
+URL the moment somebody changed gear, before anything had re-rendered, and the
+browser would cache the stale image under that new URL forever because the
+response is `immutable`.
+
+A character with no portrait emits no `img` tag at all, so an unrendered roster
+costs no requests rather than one 404 per page view.
+
+### The DAT archives
+
+They never enter any repository. Vellichor reads them from a configured path
+(`InstallLocator`, which also autodetects a retail install), and its
+`.gitignore` excludes `corpus/`, `*.dat`, `ROM[0-9]/`, `VTABLE*` and `FTABLE*`.
+Only the finished PNGs travel, roughly 120 KB each.
 
 ### Appearance resolution
 

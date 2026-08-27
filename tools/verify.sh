@@ -122,10 +122,14 @@ done
 echo '== seeding fixtures'
 docker exec -i "$DB" mariadb -uroot -p"$DBPASS" xidb < "$ROOT/tools/fixtures/seed.sql"
 
-echo '== granting the read-only herald user'
+echo '== creating the portrait database'
+docker exec -i "$DB" mariadb -uroot -p"$DBPASS" -e 'CREATE DATABASE IF NOT EXISTS xiportraits;'
+
+echo '== granting the herald user'
 docker exec -i "$DB" mariadb -uroot -p"$DBPASS" <<GRANT
 CREATE USER IF NOT EXISTS 'xiherald'@'%' IDENTIFIED BY 'heraldpass';
 GRANT SELECT ON xidb.* TO 'xiherald'@'%';
+GRANT ALL PRIVILEGES ON xiportraits.* TO 'xiherald'@'%';
 FLUSH PRIVILEGES;
 GRANT
 
@@ -152,6 +156,7 @@ docker run -d --name "$APP" --network "$NET" -p "$PORT:8080" \
     -e XI_HERALD_DB_NAME=xidb \
     -e XI_HERALD_SERVER_NAME="Vana'diel" \
     -e XI_HERALD_CACHE_TTL=0s \
+    -e XI_HERALD_PORTRAIT_SCHEMA=xiportraits \
     xiherald:verify >/dev/null
 
 for _ in $(seq 1 40); do
@@ -351,6 +356,49 @@ for doc in "$apilist" "$apichar"; do
     refute 'api never exposes gil' "$doc" 'gil'
 done
 refute 'api never exposes a gil figure' "$apichar" '48210934'
+
+# ---- portraits ------------------------------------------------------------
+# Portraits live in their own database with write access, while game data stays
+# read-only. Both halves of that split are asserted, because the whole point of
+# the separate schema is that one cannot become the other.
+check 'portraits are enabled'        "$(docker logs "$APP" 2>&1)" 'portraits enabled'
+
+# The Herald creates its own table, so a fresh database needs no migration step.
+tbl="$(docker exec "$DB" mariadb -uroot -p"$DBPASS" -N -B -e \
+    "SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='xiportraits' AND table_name='portraits'")"
+check 'the herald created the table' "$tbl" '1'
+
+# An unrendered character must not emit an img tag that 404s on every view.
+refute 'no img tag without a portrait' "$player" '/portraits/1.png'
+missing_png="$(curl -sS -o /dev/null -w '%{http_code}' "http://localhost:$PORT/portraits/1.png")"
+check 'an unrendered portrait is 404' "$missing_png" '404'
+bad_png="$(curl -sS -o /dev/null -w '%{http_code}' "http://localhost:$PORT/portraits/notanumber.png")"
+check 'a bad portrait id is 404'      "$bad_png" '404'
+
+# Insert one directly, the way the renderer does, and check it is served.
+docker exec -i "$DB" mariadb -uroot -p"$DBPASS" xiportraits <<'PNG'
+INSERT INTO portraits (charid, hash, content_type, width, height, bytes)
+VALUES (1, 'deadbeefcafe', 'image/png', 384, 576, UNHEX('89504E470D0A1A0A'))
+ON DUPLICATE KEY UPDATE hash = VALUES(hash), bytes = VALUES(bytes);
+PNG
+
+served="$(curl -sS -D - -o /dev/null "http://localhost:$PORT/portraits/1.png?v=deadbeefcafe")"
+check 'a stored portrait is served'   "$served" '200'
+check 'portraits are sent as png'     "$served" 'image/png'
+check 'portrait carries an etag'      "$served" 'deadbeefcafe'
+check 'hashed portrait is immutable'  "$served" 'max-age=31536000, immutable'
+bare="$(curl -sS -D - -o /dev/null "http://localhost:$PORT/portraits/1.png")"
+check 'unhashed portrait caches briefly' "$bare" 'max-age=300'
+
+# With a portrait present the page must link it, and with the hash so that a
+# re-render is never hidden behind a cached image.
+withimg="$(curl -fsS "http://localhost:$PORT/player/Aldwyn")"
+check 'page links the portrait'       "$withimg" '/portraits/1.png?v=deadbeefcafe'
+
+# The read-only guarantee over game data is unchanged.
+denied="$(docker exec -i "$DB" mariadb -uxiherald -pheraldpass xidb \
+    -e "UPDATE chars SET charname='hacked' WHERE charid=1" 2>&1 || true)"
+check 'game data is still read-only'  "$denied" 'denied'
 
 # ---- appearances ----------------------------------------------------------
 # The render work-list. char_look holds model ids, char_style holds item ids

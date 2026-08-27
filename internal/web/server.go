@@ -3,6 +3,7 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"embed"
@@ -14,6 +15,7 @@ import (
 	"io/fs"
 	"log/slog"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 
@@ -27,12 +29,12 @@ var templateFS embed.FS
 var staticFS embed.FS
 
 type Server struct {
-	db           *xidb.DB
-	pages        map[string]*template.Template
-	log          *slog.Logger
-	serverName   string
-	portraitBase string
-	mux          *http.ServeMux
+	db         *xidb.DB
+	pages      map[string]*template.Template
+	log        *slog.Logger
+	serverName string
+	portraits  *xidb.PortraitStore
+	mux        *http.ServeMux
 }
 
 // assetVersions maps a static path to a short hash of its contents. Templates
@@ -85,14 +87,14 @@ type page struct {
 	ServerName string
 	Title      string
 	Section    string
-	// PortraitBase is empty when no renderer is configured, which is what the
-	// templates key off to omit portraits entirely rather than show a broken
-	// image for every character.
-	PortraitBase string
+	// PortraitHash is the hash of this character's stored portrait, empty when
+	// none has been rendered. Templates emit an img tag only when it is set,
+	// so an unrendered character costs no request rather than a 404 per view.
+	PortraitHash string
 	Data         any
 }
 
-func New(db *xidb.DB, serverName, portraitBase string, log *slog.Logger) (*Server, error) {
+func New(db *xidb.DB, serverName string, portraits *xidb.PortraitStore, log *slog.Logger) (*Server, error) {
 	static, err := fs.Sub(staticFS, "static")
 	if err != nil {
 		return nil, fmt.Errorf("static subtree: %w", err)
@@ -114,7 +116,7 @@ func New(db *xidb.DB, serverName, portraitBase string, log *slog.Logger) (*Serve
 	}
 
 	s := &Server{db: db, pages: pages, log: log, serverName: serverName,
-		portraitBase: portraitBase, mux: http.NewServeMux()}
+		portraits: portraits, mux: http.NewServeMux()}
 	s.routes()
 	return s, nil
 }
@@ -135,6 +137,7 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /stats/{$}", s.statsIndex)
 	s.mux.HandleFunc("GET /stats", s.statsIndex)
 	s.mux.HandleFunc("GET /stats/{metric}", s.leaderboard)
+	s.mux.HandleFunc("GET /portraits/{file}", s.portrait)
 
 	s.apiRoutes()
 }
@@ -226,11 +229,12 @@ func (s *Server) player(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	s.render(w, r, "player.html", page{
-		Title:   p.Name,
-		Section: "roster",
-		Data:    p,
-	})
+	pg := page{Title: p.Name, Section: "roster", Data: p}
+	if hash, ok := s.portraits.HashFor(r.Context(), p.CharID); ok {
+		pg.PortraitHash = hash
+	}
+
+	s.render(w, r, "player.html", pg)
 }
 
 type statsIndexData struct {
@@ -283,9 +287,49 @@ func (s *Server) leaderboard(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// portrait serves a rendered character image out of the portrait database.
+//
+// The path carries the character id and the query carries the appearance hash,
+// so a re-rendered character gets a URL the browser has never seen. Without
+// that a cached portrait would outlive the gear change that prompted it, which
+// is the same trap the stylesheet fell into.
+func (s *Server) portrait(w http.ResponseWriter, r *http.Request) {
+	if !s.portraits.Enabled() {
+		http.NotFound(w, r)
+		return
+	}
+
+	name := strings.TrimSuffix(r.PathValue("file"), ".png")
+	charID, err := strconv.Atoi(name)
+	if err != nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	img, err := s.portraits.Get(r.Context(), charID)
+	if err != nil {
+		s.log.Error("portrait read failed", "charid", charID, "err", err)
+		http.Error(w, "portrait unavailable", http.StatusServiceUnavailable)
+		return
+	}
+	if img == nil {
+		http.NotFound(w, r)
+		return
+	}
+
+	w.Header().Set("Content-Type", img.ContentType)
+	w.Header().Set("ETag", `"`+img.Hash+`"`)
+	if r.URL.Query().Get("v") != "" {
+		w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+	} else {
+		w.Header().Set("Cache-Control", "public, max-age=300")
+	}
+
+	http.ServeContent(w, r, name+".png", img.RenderedAt, bytesReader(img.Bytes))
+}
+
 func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, p page) {
 	p.ServerName = s.serverName
-	p.PortraitBase = s.portraitBase
 
 	set, ok := s.pages[name]
 	if !ok {
@@ -451,3 +495,7 @@ func comma(n int64) string {
 	}
 	return b.String()
 }
+
+// bytesReader adapts a blob to what http.ServeContent needs, which gives range
+// requests and conditional GETs for free.
+func bytesReader(b []byte) *bytes.Reader { return bytes.NewReader(b) }

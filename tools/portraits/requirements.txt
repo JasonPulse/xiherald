@@ -1,0 +1,3 @@
+# The renderer writes PNG blobs straight into the portrait database, so the
+# Herald never needs a network write path.
+PyMySQL>=1.1

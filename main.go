@@ -47,13 +47,18 @@ func run(log *slog.Logger) error {
 		log.Info("database connected", "host", cfg.DBHost, "db", cfg.DBName)
 	}
 
-	if cfg.PortraitBaseURL == "" {
-		log.Info("portraits disabled, set XI_HERALD_PORTRAIT_BASE_URL to enable")
+	portraits, err := db.OpenPortraits(startupCtx, cfg.PortraitSchema)
+	if err != nil {
+		// Portraits are a decoration. The Herald serves every page without
+		// them, so this is a warning rather than a failed start.
+		log.Warn("portraits unavailable", "schema", cfg.PortraitSchema, "err", err)
+	} else if portraits.Enabled() {
+		log.Info("portraits enabled", "schema", cfg.PortraitSchema)
 	} else {
-		log.Info("portraits enabled", "base", cfg.PortraitBaseURL)
+		log.Info("portraits disabled by configuration")
 	}
 
-	srv, err := web.New(db, cfg.ServerName, cfg.PortraitBaseURL, log)
+	srv, err := web.New(db, cfg.ServerName, portraits, log)
 	if err != nil {
 		return err
 	}

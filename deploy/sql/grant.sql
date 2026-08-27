@@ -35,6 +35,12 @@ GRANT SELECT ON xidb.accounts_sessions TO 'xiherald'@'%';
 -- A column grant keeps the rest of every character's inventory out of reach.
 GRANT SELECT (charid, location, slot, quantity) ON xidb.char_inventory TO 'xiherald'@'%';
 
+-- Portraits live in their own database, and this is the only place the Herald
+-- has write access. Keeping it out of xidb is what preserves the read-only
+-- guarantee over game data.
+CREATE DATABASE IF NOT EXISTS xiportraits;
+GRANT ALL PRIVILEGES ON xiportraits.* TO 'xiherald'@'%';
+
 FLUSH PRIVILEGES;
 
 -- Confirm the result:
