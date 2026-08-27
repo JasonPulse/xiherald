@@ -19,7 +19,8 @@ sort orders. Online characters are marked live from `accounts_sessions`.
 points. All 22 job levels with job points. Combat, defensive and magic skills
 against their level-and-rank cap from `skill_caps`. Craft skills with synthesis
 rank and guild points. The full `char_history` record. Nation ranks and fame
-across all 15 fame areas.
+across all 15 fame areas. Mission standing per expansion, decoded from the
+`chars.missions` blob.
 
 **Fun stats.** Twenty-one leaderboards in three groups. Combat covers kills,
 deaths, K/D, knockouts, battles, weapon skills, spells and abilities. Activity
@@ -29,6 +30,45 @@ at 99, master level, merits, rank points and job points.
 
 Adding a board is one entry in `Metrics` in `internal/xidb/leaders.go`. The
 query, the page, the stats index and the sidebar all read from that registry.
+
+## Mission decoding
+
+`chars.missions` is a raw dump of `missionlog_t[15]` from the server's
+`common/mmo.h`: `uint16 current`, `statusUpper`, `statusLower`, then
+`bool complete[64]`. Seventy bytes per log, fifteen logs, 1050 bytes,
+little-endian.
+
+Two rules in there are not inferable from the data and were taken from the
+server's own accessors. Both change the answer.
+
+**"No current mission" is spelled differently per log.** `setMissionStatus`
+clears it with `logId > 2 ? 0 : uint16 max`, so the three nation logs use 65535
+while every expansion log uses 0. Reading 0 as "none" everywhere hides San
+d'Oria's first mission; reading it as a mission everywhere invents one for every
+fresh character.
+
+**Completion is a hybrid.** `hasCompletedMission` uses
+`(log == CoP || id >= 64) ? id < current : complete[id]`, because the complete
+array has only 64 slots while SoA has 105 missions and RoV has 94. Those logs
+fall back to treating `current` as a high-water mark.
+
+Mission ids are sparse and per-log, so completion is counted over the ids that
+actually exist in the generated name table. That is what makes "41 of 48"
+meaningful rather than a raw bit count.
+
+One honest limitation: the number shown is the server's internal mission id. For
+the numbered expansions (ToAU, WotG, SoA, RoV) that matches how players refer to
+them, so ToAU 41 really is ToAU 41. Nation and CoP missions use chapter notation
+at retail, and the server data holds no mapping to it, so CoP shows its internal
+id with the mission name beside it.
+
+`tools/gen_missions.py` regenerates the name table from
+`scripts/globals/missions.lua`: 527 mission names across 15 logs. Assault and
+Campaign have no mission table there, so they report no names.
+
+```bash
+./tools/gen_missions.py ../xiserver/scripts/globals/missions.lua
+```
 
 ## JSON API
 
