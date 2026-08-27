@@ -183,6 +183,19 @@ check 'roster resolves the zone name'  "$roster" 'Windurst'
 refute 'roster leaks a template error' "$roster" 'no such template'
 refute 'roster leaves a raw action'    "$roster" '{{'
 
+# Unfinished character slots have a blank charname. Fixture charid 6 is one,
+# and it must be absent from every list, every count and every board.
+check 'roster excludes the unnamed slot' \
+    "$roster" '<span class="tile-n">5</span><span class="tile-l">Characters</span>'
+refute 'roster has no empty name cell'  "$roster" '<a href="/player/"></a>'
+refute 'roster has no empty name link'  "$roster" 'href="/player/"'
+
+unnamed="$(curl -sS -o /dev/null -w '%{http_code}' "http://localhost:$PORT/player/")"
+check 'a blank character name is not a page' "$unnamed" '404'
+
+levels="$(curl -fsS "http://localhost:$PORT/stats/levels")"
+refute 'boards exclude the unnamed slot' "$levels" 'href="/player/"'
+
 sorted="$(curl -fsS "http://localhost:$PORT/?sort=kills")"
 check 'sort=kills is accepted'         "$sorted" 'Enemies defeated'
 bogus="$(curl -fsS "http://localhost:$PORT/?sort=%27%3B+DROP+TABLE+chars%3B+--")"

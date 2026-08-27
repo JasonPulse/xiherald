@@ -338,6 +338,7 @@ func (db *DB) Leaderboard(ctx context.Context, m Metric) ([]LeaderRow, error) {
 		        SELECT charid, SUM(job_points) AS total
 		        FROM char_job_points GROUP BY charid
 		    ) jpt ON jpt.charid = c.charid
+		    WHERE ` + realCharacter + `
 		) board
 		WHERE value > 0
 		ORDER BY value DESC, charname ASC`

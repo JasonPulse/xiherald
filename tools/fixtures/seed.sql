@@ -9,7 +9,9 @@ INSERT INTO chars (charid, accid, charname, nation, pos_zone, playtime, timecrea
   (2, 1, 'Muunbeam', 2, 241,  623040, '2024-07-02 18:02:00', '2026-08-24 23:12:00'),
   (3, 2, 'Krogthar',  1, 234,  204120, '2025-11-19 12:30:00', '2026-08-19 02:55:00'),
   (4, 2, 'Sylvenne', 0, 100,    5400, '2026-08-25 21:00:00', '2026-08-25 22:30:00'),
-  (5, 3, 'Neverwas',  1, 234,       0, '2026-08-26 08:00:00', '2026-08-26 08:00:00');
+  (5, 3, 'Neverwas',  1, 234,       0, '2026-08-26 08:00:00', '2026-08-26 08:00:00'),
+  -- An unfinished slot: reserved, never named. Must not appear anywhere.
+  (6, 3, '',          1, 234,       0, '2026-08-26 09:00:00', '2026-08-26 09:00:00');
 
 INSERT INTO char_stats (charid, mjob, sjob, mlvl, slvl, death, title, master_level, exemplar_points) VALUES
   (1, 12, 13, 99, 49, 812, 145, 12, 184320),
@@ -19,7 +21,7 @@ INSERT INTO char_stats (charid, mjob, sjob, mlvl, slvl, death, title, master_lev
   (5,  0,  0,  1,  0,   0,   0,  0,      0);
 
 INSERT INTO char_look (charid, face, race, size) VALUES
-  (1, 3, 3, 1), (2, 1, 6, 0), (3, 0, 8, 2), (4, 5, 7, 1), (5, 0, 1, 1);
+  (1, 3, 3, 1), (2, 1, 6, 0), (3, 0, 8, 2), (4, 5, 7, 1), (5, 0, 1, 1), (6, 0, 3, 1);
 
 INSERT INTO char_history
   (charid, enemies_defeated, times_knocked_out, mh_entrances, joined_parties,

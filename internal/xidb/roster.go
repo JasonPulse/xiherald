@@ -131,6 +131,13 @@ const rosterColumns = `
 	  COALESCE(h.enemies_defeated, 0)     AS kills,
 	  COALESCE(h.times_knocked_out, 0)    AS kos`
 
+// realCharacter excludes character slots that were never finished. A chars row
+// is written when a slot is reserved, before the player has committed to a name,
+// so a blank charname is an abandoned slot rather than a person. Every query
+// that counts or lists characters has to apply this, which is why it lives in
+// one place.
+const realCharacter = `TRIM(c.charname) <> ''`
+
 const rosterJoins = `
 	FROM chars c
 	LEFT JOIN char_stats        s    ON s.charid    = c.charid
@@ -157,6 +164,7 @@ func (db *DB) Roster(ctx context.Context, sort string) ([]RosterRow, error) {
 	  ` + cappedExpr + ` AS jobs_capped,
 	  sess.charid IS NOT NULL AS online` +
 			rosterJoins + `
+	WHERE ` + realCharacter + `
 	ORDER BY ` + order
 
 		rows, err := db.sql.QueryContext(ctx, query)
@@ -212,7 +220,8 @@ func (db *DB) Summary(ctx context.Context) (ServerSummary, error) {
 		LEFT JOIN char_history      h    ON h.charid    = c.charid
 		LEFT JOIN char_stats        st   ON st.charid   = c.charid
 		LEFT JOIN char_jobs         j    ON j.charid    = c.charid
-		LEFT JOIN accounts_sessions sess ON sess.charid = c.charid`
+		LEFT JOIN accounts_sessions sess ON sess.charid = c.charid
+		WHERE ` + realCharacter
 
 		if err := db.sql.QueryRowContext(ctx, query).Scan(
 			&s.Characters, &s.Online, &s.TotalKills, &s.TotalDeaths,
@@ -224,7 +233,9 @@ func (db *DB) Summary(ctx context.Context) (ServerSummary, error) {
 		// Newest character is a separate read so an empty chars table still
 		// yields a usable summary rather than a NULL scan error.
 		err := db.sql.QueryRowContext(ctx,
-			`SELECT charname, timecreated FROM chars ORDER BY timecreated DESC LIMIT 1`,
+			`SELECT charname, timecreated FROM chars c
+			 WHERE `+realCharacter+`
+			 ORDER BY timecreated DESC LIMIT 1`,
 		).Scan(&s.NewestChar, &s.NewestJoined)
 		if err != nil && !isNoRows(err) {
 			return s, fmt.Errorf("summary newest: %w", err)

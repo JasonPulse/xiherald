@@ -155,6 +155,10 @@ var fameAreas = []struct {
 // Player loads one character by name. Names are unique in chars, and the
 // lookup is case-insensitive because the collation is.
 func (db *DB) Player(ctx context.Context, name string) (*Player, error) {
+	if strings.TrimSpace(name) == "" {
+		return nil, ErrNotFound
+	}
+
 	return cached(db.cache, "player:"+strings.ToLower(name), func() (*Player, error) {
 		p := &Player{}
 
@@ -192,7 +196,7 @@ func (db *DB) loadIdentity(ctx context.Context, name string, p *Player) error {
 	LEFT JOIN char_exp e ON e.charid = c.charid
 	LEFT JOIN char_inventory gil
 	       ON gil.charid = c.charid AND gil.location = 0 AND gil.slot = 0
-	WHERE c.charname = ?
+	WHERE c.charname = ? AND ` + realCharacter + `
 	LIMIT 1`
 
 	r := &p.RosterRow
