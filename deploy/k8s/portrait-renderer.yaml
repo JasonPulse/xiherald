@@ -1,7 +1,7 @@
 # Reference only. See ../HANDOFF.md.
 # Every CHANGE_ME is an infrastructure decision this repo does not make.
 #
-# The renderer image contains retail game data and must come from a PRIVATE
+# The renderer image contains retail game data and comes from a private
 # registry. It is built on a workstation by tools/portraits/build_image.sh,
 # because the DAT archives are gitignored out of every repository and CI has no
 # access to them.
@@ -23,8 +23,11 @@ spec:
       template:
         spec:
           restartPolicy: Never
+          # The image is private, so this is required. Without it the pull only
+          # succeeds on a node that happens to have the layers cached already,
+          # which fails silently until the job is scheduled somewhere else.
           imagePullSecrets:
-            - name: CHANGE_ME
+            - name: dockerhub
           containers:
             - name: renderer
               image: jasonpulse/vellichor-renderer:latest
