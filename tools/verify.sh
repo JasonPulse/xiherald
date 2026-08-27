@@ -193,6 +193,21 @@ refute 'roster has no empty name link'  "$roster" 'href="/player/"'
 unnamed="$(curl -sS -o /dev/null -w '%{http_code}' "http://localhost:$PORT/player/")"
 check 'a blank character name is not a page' "$unnamed" '404'
 
+# Deaths come from char_history.times_knocked_out. char_stats.death is a
+# weakness timer that reads zero for anyone not currently dead, and the fixture
+# sets it to zero throughout, so any of these showing 0 means the old field is
+# back.
+check 'summary deaths use knockouts' \
+    "$roster" '<span class="tile-n">1,125</span><span class="tile-l">Deaths</span>'
+check 'roster deaths use knockouts'  "$roster" '812'
+
+deathboard="$(curl -fsS "http://localhost:$PORT/stats/deaths")"
+check 'deaths board counts knockouts' "$deathboard" '812'
+refute 'deaths board is not all zero'  "$deathboard" 'Nobody has scored'
+
+gone="$(curl -sS -o /dev/null -w '%{http_code}' "http://localhost:$PORT/stats/knockouts")"
+check 'the duplicate knockouts board is gone' "$gone" '404'
+
 levels="$(curl -fsS "http://localhost:$PORT/stats/levels")"
 refute 'boards exclude the unnamed slot' "$levels" 'href="/player/"'
 

@@ -19,9 +19,8 @@ type RosterRow struct {
 	SubLevel    int
 	MasterLevel int
 	TitleID     int
-	Deaths      int
 	Kills       int
-	KOs         int
+	Deaths      int
 	TotalLevels int
 	JobsCapped  int
 	Playtime    int
@@ -62,13 +61,13 @@ func (r RosterRow) Job() string {
 // PlaytimeHours is what the roster column shows. chars.playtime counts seconds.
 func (r RosterRow) PlaytimeHours() float64 { return float64(r.Playtime) / 3600.0 }
 
-// KD is kills per knockout. A character who has never been knocked out reports
+// KD is kills per death. A character who has never been knocked out reports
 // their kill count outright rather than dividing by zero.
 func (r RosterRow) KD() float64 {
-	if r.KOs == 0 {
+	if r.Deaths == 0 {
 		return float64(r.Kills)
 	}
-	return float64(r.Kills) / float64(r.KOs)
+	return float64(r.Kills) / float64(r.Deaths)
 }
 
 // rosterSorts whitelists the ?sort= values. Interpolating user input into an
@@ -127,9 +126,10 @@ const rosterColumns = `
 	  COALESCE(s.slvl, 0)                 AS sub_level,
 	  COALESCE(s.master_level, 0)         AS master_level,
 	  COALESCE(s.title, 0)                AS title_id,
-	  COALESCE(s.death, 0)                AS deaths,
 	  COALESCE(h.enemies_defeated, 0)     AS kills,
-	  COALESCE(h.times_knocked_out, 0)    AS kos`
+	  -- char_stats.death holds seconds-since-death for the weakness timer, not
+	  -- a tally, so the only real death count is char_history.
+	  COALESCE(h.times_knocked_out, 0)    AS deaths`
 
 // realCharacter excludes character slots that were never finished. A chars row
 // is written when a slot is reserved, before the player has committed to a name,
@@ -180,7 +180,7 @@ func (db *DB) Roster(ctx context.Context, sort string) ([]RosterRow, error) {
 				&r.CharID, &r.Name, &r.Nation, &r.Playtime, &r.Created,
 				&r.LastLogout, &r.ZoneID, &r.ZoneName, &r.Race, &r.MainJob,
 				&r.MainLevel, &r.SubJob, &r.SubLevel, &r.MasterLevel,
-				&r.TitleID, &r.Deaths, &r.Kills, &r.KOs,
+				&r.TitleID, &r.Kills, &r.Deaths,
 				&r.TotalLevels, &r.JobsCapped, &r.Online,
 			); err != nil {
 				return nil, fmt.Errorf("roster scan: %w", err)
@@ -213,12 +213,11 @@ func (db *DB) Summary(ctx context.Context) (ServerSummary, error) {
 		  COUNT(*),
 		  COALESCE(SUM(sess.charid IS NOT NULL), 0),
 		  COALESCE(SUM(h.enemies_defeated), 0),
-		  COALESCE(SUM(st.death), 0),
+		  COALESCE(SUM(h.times_knocked_out), 0),
 		  COALESCE(SUM(c.playtime), 0) / 3600.0,
 		  COALESCE(SUM(` + cappedExpr + `), 0)
 		FROM chars c
 		LEFT JOIN char_history      h    ON h.charid    = c.charid
-		LEFT JOIN char_stats        st   ON st.charid   = c.charid
 		LEFT JOIN char_jobs         j    ON j.charid    = c.charid
 		LEFT JOIN accounts_sessions sess ON sess.charid = c.charid
 		WHERE ` + realCharacter

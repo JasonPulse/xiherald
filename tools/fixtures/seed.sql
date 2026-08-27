@@ -14,10 +14,10 @@ INSERT INTO chars (charid, accid, charname, nation, pos_zone, playtime, timecrea
   (6, 3, '',          1, 234,       0, '2026-08-26 09:00:00', '2026-08-26 09:00:00');
 
 INSERT INTO char_stats (charid, mjob, sjob, mlvl, slvl, death, title, master_level, exemplar_points) VALUES
-  (1, 12, 13, 99, 49, 812, 145, 12, 184320),
-  (2,  3, 20, 99, 49, 214,  38,  4,  22100),
-  (3,  1,  6, 76, 38,  96,   0,  0,      0),
-  (4,  5,  0, 14,  0,   3,   0,  0,      0),
+  (1, 12, 13, 99, 49, 0, 145, 12, 184320),
+  (2,  3, 20, 99, 49, 0,  38,  4,  22100),
+  (3,  1,  6, 76, 38,  0,   0,  0,      0),
+  (4,  5,  0, 14,  0,   0,   0,  0,      0),
   (5,  0,  0,  1,  0,   0,   0,  0,      0);
 
 INSERT INTO char_look (charid, face, race, size) VALUES

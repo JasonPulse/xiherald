@@ -203,7 +203,7 @@ func (db *DB) loadIdentity(ctx context.Context, name string, p *Player) error {
 	err := db.sql.QueryRowContext(ctx, query, name).Scan(
 		&r.CharID, &r.Name, &r.Nation, &r.Playtime, &r.Created, &r.LastLogout,
 		&r.ZoneID, &r.ZoneName, &r.Race, &r.MainJob, &r.MainLevel, &r.SubJob,
-		&r.SubLevel, &r.MasterLevel, &r.TitleID, &r.Deaths, &r.Kills, &r.KOs,
+		&r.SubLevel, &r.MasterLevel, &r.TitleID, &r.Kills, &r.Deaths,
 		&r.TotalLevels, &r.JobsCapped, &r.Online,
 		&p.Gil, &p.Merits, &p.Limits, &p.Exemplar,
 	)

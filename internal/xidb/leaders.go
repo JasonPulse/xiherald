@@ -75,10 +75,11 @@ func buildMetrics() []Metric {
 			Group:  groupCombat,
 		},
 		{
-			Slug:   "deaths",
-			Label:  "Deaths",
-			Blurb:  "Weakness is a lifestyle. Counted from char_stats.",
-			Expr:   "COALESCE(s.death, 0)",
+			Slug:  "deaths",
+			Label: "Deaths",
+			Blurb: "Trips to the Home Point, the hard way. Counted from times " +
+				"knocked out; char_stats.death is a weakness timer, not a tally.",
+			Expr:   "COALESCE(h.times_knocked_out, 0)",
 			Format: FormatInt,
 			Group:  groupCombat,
 		},
@@ -89,14 +90,6 @@ func buildMetrics() []Metric {
 			Expr: "COALESCE(h.enemies_defeated, 0) / " +
 				"GREATEST(COALESCE(h.times_knocked_out, 0), 1)",
 			Format: FormatRatio,
-			Group:  groupCombat,
-		},
-		{
-			Slug:   "knockouts",
-			Label:  "Times knocked out",
-			Blurb:  "Trips to the Home Point, the hard way.",
-			Expr:   "COALESCE(h.times_knocked_out, 0)",
-			Format: FormatInt,
 			Group:  groupCombat,
 		},
 		{
