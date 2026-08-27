@@ -255,6 +255,28 @@ check 'the jobs-at-99 board counts' "$capped" 'Jobs at 99'
 badboard="$(curl -sS -o /dev/null -w '%{http_code}' "http://localhost:$PORT/stats/nonsense")"
 check 'an unknown board is a 404' "$badboard" '404'
 
+# Caching contract. A stylesheet edit has to be able to reach a browser that
+# already loaded the old one, which means the URL in the HTML must carry a
+# content hash and the page itself must be revalidated.
+check 'stylesheet URL is content-addressed' "$roster" '/static/css/herald.css?v='
+check 'logo URL is content-addressed'       "$roster" '/static/img/logo-banner.jpg?v='
+
+pagehdr="$(curl -fsS -D - -o /dev/null "http://localhost:$PORT/")"
+check 'pages are revalidated' "$pagehdr" 'no-cache'
+
+ver="$(curl -fsS "http://localhost:$PORT/" | sed -n 's|.*herald\.css?v=\([a-f0-9]*\).*|\1|p' | head -1)"
+verhdr="$(curl -fsS -D - -o /dev/null "http://localhost:$PORT/static/css/herald.css?v=$ver")"
+check 'fingerprinted assets are immutable' "$verhdr" 'max-age=31536000, immutable'
+
+barehdr="$(curl -fsS -D - -o /dev/null "http://localhost:$PORT/static/css/herald.css")"
+check 'unfingerprinted assets cache briefly' "$barehdr" 'max-age=300'
+refute 'and are never immutable'             "$barehdr" 'immutable'
+
+# Bastok is blue. Gold here means the nation palette regressed.
+servedcss="$(curl -fsS "http://localhost:$PORT/static/css/herald.css")"
+check 'Bastok is blue'      "$servedcss" '#6b8fd4'
+refute 'Bastok is not gold' "$servedcss" '#cfa14a'
+
 css="$(curl -sS -o /dev/null -w '%{http_code}' "http://localhost:$PORT/static/css/herald.css")"
 check 'the stylesheet is served' "$css" '200'
 logo="$(curl -sS -o /dev/null -w '%{http_code}' "http://localhost:$PORT/static/img/logo-banner.jpg")"

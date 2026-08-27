@@ -4,14 +4,14 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>{{ .Title }} &middot; FFXI Herald</title>
-<link rel="icon" type="image/png" href="/static/img/favicon.png">
-<link rel="stylesheet" href="/static/css/herald.css">
+<link rel="icon" type="image/png" href="{{ asset "/static/img/favicon.png" }}">
+<link rel="stylesheet" href="{{ asset "/static/css/herald.css" }}">
 </head>
 <body>
 
 <header class="hero">
   <a class="hero-logo" href="/">
-    <img src="/static/img/logo-banner.jpg" alt="FFXI Herald">
+    <img src="{{ asset "/static/img/logo-banner.jpg" }}" alt="FFXI Herald">
   </a>
   <p class="hero-sub">{{ .ServerName }} &middot; player statistics</p>
 </header>

@@ -4,10 +4,13 @@ package web
 
 import (
 	"context"
+	"crypto/sha256"
 	"embed"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"html/template"
+	"io"
 	"io/fs"
 	"log/slog"
 	"net/http"
@@ -31,6 +34,39 @@ type Server struct {
 	mux        *http.ServeMux
 }
 
+// assetVersions maps a static path to a short hash of its contents. Templates
+// resolve asset URLs through it so that a changed file gets a changed URL.
+//
+// Without this, a long cache lifetime on /static/ is a trap: the paths are
+// fixed, so a stylesheet edit stays invisible to anyone who has already loaded
+// the old one until their cache expires. Content-addressed URLs are what make
+// caching hard actually safe.
+func assetVersions(root fs.FS) (map[string]string, error) {
+	out := map[string]string{}
+
+	err := fs.WalkDir(root, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+
+		f, err := root.Open(path)
+		if err != nil {
+			return err
+		}
+		defer f.Close()
+
+		sum := sha256.New()
+		if _, err := io.Copy(sum, f); err != nil {
+			return err
+		}
+
+		out["/static/"+path] = hex.EncodeToString(sum.Sum(nil))[:10]
+		return nil
+	})
+
+	return out, err
+}
+
 // pageTemplates are the top-level views. Each is parsed into its own template
 // set alongside base.html, which is what lets every page define "content" and
 // "sidebar" under the same names without colliding.
@@ -52,9 +88,19 @@ type page struct {
 }
 
 func New(db *xidb.DB, serverName string, log *slog.Logger) (*Server, error) {
+	static, err := fs.Sub(staticFS, "static")
+	if err != nil {
+		return nil, fmt.Errorf("static subtree: %w", err)
+	}
+
+	versions, err := assetVersions(static)
+	if err != nil {
+		return nil, fmt.Errorf("hash static assets: %w", err)
+	}
+
 	pages := make(map[string]*template.Template, len(pageTemplates))
 	for _, name := range pageTemplates {
-		set, err := template.New(name).Funcs(funcs()).ParseFS(templateFS,
+		set, err := template.New(name).Funcs(funcs(versions)).ParseFS(templateFS,
 			"templates/base.html", "templates/"+name)
 		if err != nil {
 			return nil, fmt.Errorf("parse %s: %w", name, err)
@@ -75,12 +121,7 @@ func (s *Server) routes() {
 		panic(fmt.Sprintf("static subtree: %v", err))
 	}
 
-	// Assets are embedded and content-stable per build, so they are safe to
-	// cache hard. A new image means new URLs only if the file changes, which
-	// is fine for a herald refreshed by hand.
-	fileServer := http.StripPrefix("/static/", cacheFor(24*time.Hour, http.FileServer(http.FS(static))))
-
-	s.mux.Handle("GET /static/", fileServer)
+	s.mux.Handle("GET /static/", http.StripPrefix("/static/", staticCache(http.FileServer(http.FS(static)))))
 	s.mux.HandleFunc("GET /livez", s.livez)
 	s.mux.HandleFunc("GET /healthz", s.healthz)
 	s.mux.HandleFunc("GET /{$}", s.roster)
@@ -90,9 +131,19 @@ func (s *Server) routes() {
 	s.mux.HandleFunc("GET /stats/{metric}", s.leaderboard)
 }
 
-func cacheFor(d time.Duration, next http.Handler) http.Handler {
+// staticCache caches by whether the URL identifies its contents.
+//
+// A request carrying ?v= came from a template that resolved the file's content
+// hash, so that URL can only ever mean one body and is safe to keep for a year.
+// Anything else (a bare path, or a url() inside the stylesheet) gets minutes,
+// so it cannot go stale for long.
+func staticCache(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Cache-Control", fmt.Sprintf("public, max-age=%d", int(d.Seconds())))
+		if r.URL.Query().Get("v") != "" {
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		} else {
+			w.Header().Set("Cache-Control", "public, max-age=300")
+		}
 		next.ServeHTTP(w, r)
 	})
 }
@@ -235,6 +286,9 @@ func (s *Server) render(w http.ResponseWriter, r *http.Request, name string, p p
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
+	// Pages must always be revalidated, otherwise a cached page keeps pointing
+	// at the previous build's asset URLs and the fingerprinting buys nothing.
+	w.Header().Set("Cache-Control", "no-cache")
 	if err := set.ExecuteTemplate(w, "base.html", p); err != nil {
 		// The response is already partly written by this point, so all that is
 		// left is to record it.
@@ -261,8 +315,16 @@ func (s *Server) fail(w http.ResponseWriter, r *http.Request, err error) {
 	})
 }
 
-func funcs() template.FuncMap {
+func funcs(versions map[string]string) template.FuncMap {
 	return template.FuncMap{
+		// asset turns a static path into a content-addressed URL.
+		"asset": func(path string) string {
+			if v, ok := versions[path]; ok {
+				return path + "?v=" + v
+			}
+			return path
+		},
+
 		// comma groups thousands, which every number on this site needs.
 		"comma": commaAny,
 
