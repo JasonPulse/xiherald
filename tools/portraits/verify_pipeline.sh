@@ -137,6 +137,25 @@ again="$(docker run --rm --network "$NET" \
     --herald "http://$APP:8080" --db-host "$DB" 2>&1 | tail -2)"
 check 'unchanged characters are skipped' "$again" 'rendered 0'
 
+echo '== a renderer change must re-render everyone'
+# The whole point: a portrait is a function of appearance AND renderer. If the
+# renderer improves and nothing re-renders, the improvement never ships.
+bumped="$(docker run --rm --network "$NET" \
+    -e XI_PORTRAIT_DB_USER=xiherald -e XI_PORTRAIT_DB_PASS=heraldpass \
+    -e XI_PORTRAIT_DB_NAME=xiportraits \
+    -e XI_RENDERER_VERSION=pretend-a-fix "$IMAGE" \
+    --herald "http://$APP:8080" --db-host "$DB" 2>&1 | tail -3)"
+check 'a renderer bump re-renders all'  "$bumped" 'unchanged 0'
+check 'and it actually rendered them'   "$bumped" 'failed 0'
+
+echo '== and is then itself stable'
+stable="$(docker run --rm --network "$NET" \
+    -e XI_PORTRAIT_DB_USER=xiherald -e XI_PORTRAIT_DB_PASS=heraldpass \
+    -e XI_PORTRAIT_DB_NAME=xiportraits \
+    -e XI_RENDERER_VERSION=pretend-a-fix "$IMAGE" \
+    --herald "http://$APP:8080" --db-host "$DB" 2>&1 | tail -2)"
+check 'the new version then skips'      "$stable" 'rendered 0'
+
 echo
 echo "== $PASSES passed, $FAILURES failed"
 [[ "$FAILURES" -eq 0 ]] || { docker logs "$APP" 2>&1 | tail -20; exit 1; }

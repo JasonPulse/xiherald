@@ -57,6 +57,7 @@ import subprocess
 import sys
 import atexit
 import contextlib
+import hashlib
 import socket
 import tempfile
 import time
@@ -163,6 +164,21 @@ def connect(args):
     with conn.cursor() as cur:
         cur.execute(SCHEMA_DDL.format(schema=args.db_schema))
     return conn
+
+
+def stored_key(appearance_hash, renderer_version):
+    """The value stored beside a portrait, and its cache key.
+
+    Deliberately not the bare appearance hash. A portrait is a function of both
+    the appearance and the renderer, so improving the renderer has to invalidate
+    every portrait; otherwise every character is skipped and the improvement
+    never reaches anyone.
+
+    It also doubles as the URL version, so a re-render changes the URL and a
+    consumer caching immutably still picks the new image up.
+    """
+    digest = hashlib.sha256(f"{appearance_hash}|{renderer_version}".encode())
+    return digest.hexdigest()[:12]
 
 
 def stored_hashes(conn, schema):
@@ -294,7 +310,11 @@ def main():
                     help="tolerance when keying out the magenta background")
     ap.add_argument("--timeout", type=int, default=180)
     ap.add_argument("--only", help="render just this character name")
-    ap.add_argument("--force", action="store_true", help="ignore the manifest")
+    ap.add_argument("--force", action="store_true",
+                    help="re-render everything regardless of stored hashes")
+    ap.add_argument("--renderer-version",
+                    default=os.environ.get("XI_RENDERER_VERSION", "dev"),
+                    help="baked into the image; changing it re-renders everyone")
     ap.add_argument("--limit", type=int,
                     help="stop after this many render attempts, successful or not")
     args = ap.parse_args()
@@ -328,8 +348,11 @@ def run(args, conn):
     appearances = fetch_appearances(args.herald)
     stored = {} if args.force else stored_hashes(conn, args.db_schema)
 
+    version = args.renderer_version
     todo = sum(1 for a in appearances
-               if a["renderable"] and stored.get(str(a["character_id"])) != a["hash"])
+               if a["renderable"]
+               and stored.get(str(a["character_id"])) != stored_key(a["hash"], version))
+    print(f"renderer {version}")
     print(f"{len(appearances)} characters, {len(stored)} already stored, "
           f"{todo} to render")
 
@@ -351,7 +374,7 @@ def run(args, conn):
             unrenderable += 1
             continue
 
-        if stored.get(key) == a["hash"]:
+        if stored.get(key) == stored_key(a["hash"], version):
             skipped += 1
             continue
 
@@ -373,7 +396,8 @@ def run(args, conn):
 
         try:
             size, w, h = store_portrait(conn, args.db_schema,
-                                        a["character_id"], a["hash"], dest)
+                                        a["character_id"],
+                                        stored_key(a["hash"], version), dest)
         except pymysql.Error as err:
             print(f"  FAIL   {a['name']}: store failed: {err}", file=sys.stderr)
             failed += 1

@@ -14,6 +14,9 @@
 
 ARG GODOT_VERSION=4.7.1-stable
 ARG TARGETARCH
+# Content hash of everything that affects the rendered output. Folded into the
+# stored portrait hash so a renderer change re-renders everyone.
+ARG RENDERER_VERSION=unknown
 
 # ---------------------------------------------------------------- builder
 # Godot resolves the C# assembly through its own project layout, so the

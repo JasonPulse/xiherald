@@ -52,11 +52,33 @@ rsync -a --quiet \
 
 cp "$HERE/render_portraits.py" "$HERE/entrypoint.sh" "$HERE/Dockerfile" "$STAGE/"
 
+# A renderer version derived from content, not from git.
+#
+# Portraits are skipped when the appearance hash is unchanged, which is correct
+# for gear but wrong for the renderer itself: improve the rendering and every
+# character is skipped, so nobody ever sees the improvement. Baking a version
+# into the image and folding it into the stored hash makes a renderer change
+# invalidate all portraits automatically.
+#
+# It hashes file contents rather than a git SHA because the Vellichor tree is
+# routinely dirty; a commit-based version would miss exactly the local fix
+# being tested.
+RENDERER_VERSION="$(
+    {
+        find "$STAGE/vellichor" -type f \
+            \( -name '*.cs' -o -name '*.json' -o -name '*.csproj' -o -name 'project.godot' \) \
+            -not -path '*/.godot/*' -print0 | sort -z | xargs -0 shasum -a 256
+        shasum -a 256 "$HERE/render_portraits.py" "$HERE/entrypoint.sh"
+    } | shasum -a 256 | cut -c1-12
+)"
+echo "   renderer version: $RENDERER_VERSION"
+
 echo "== building $TAG for $PLATFORM"
 du -sh "$STAGE" | sed 's/^/   context: /'
 
 args=(buildx build --builder "$BUILDER" --platform "$PLATFORM"
-      --provenance=false -t "$TAG" "$STAGE")
+      --provenance=false --build-arg "RENDERER_VERSION=$RENDERER_VERSION"
+      -t "$TAG" "$STAGE")
 if [[ "$PUSH" == 1 ]]; then
     args+=(--push)
     echo '   NOTE: this image contains retail game data. The target registry'
