@@ -26,6 +26,7 @@ type Player struct {
 	Crafts   []CraftRow
 	Missions []MissionProgress
 	Look     Appearance
+	Gear     Loadout
 }
 
 // StartedMissions is the subset worth rendering: a log nobody has touched is
@@ -197,6 +198,11 @@ func (db *DB) Player(ctx context.Context, name string) (*Player, error) {
 		// A missing appearance is not fatal; the page just shows no portrait.
 		if look, err := db.AppearanceOf(ctx, p.Name); err == nil {
 			p.Look = look
+		}
+		// Gear is decoration on the page, so a failure here must not take the
+		// whole character record with it.
+		if gear, err := db.Loadout(ctx, p.CharID, p.MainJob); err == nil {
+			p.Gear = gear
 		}
 		return p, nil
 	})

@@ -116,6 +116,21 @@ type apiFame struct {
 	Value int    `json:"value"`
 }
 
+type apiEquipPiece struct {
+	Slot   string `json:"slot"`
+	Label  string `json:"label"`
+	ItemID int    `json:"item_id"`
+	Name   string `json:"name"`
+}
+
+type apiLoadout struct {
+	JobID     int             `json:"job_id"`
+	Job       string          `json:"job"`
+	JobName   string          `json:"job_name"`
+	Pieces    []apiEquipPiece `json:"pieces"`
+	OtherJobs []string        `json:"other_jobs"`
+}
+
 type apiMission struct {
 	Log            string `json:"log"`
 	LogID          int    `json:"log_id"`
@@ -144,6 +159,7 @@ type apiCharacterDetail struct {
 	Skills      []apiSkill      `json:"skills"`
 	Crafts      []apiCraft      `json:"crafts"`
 	Appearance  *apiAppearance  `json:"appearance,omitempty"`
+	Gear        *apiLoadout     `json:"gear,omitempty"`
 	Missions    []apiMission    `json:"missions"`
 	History     map[string]int  `json:"history"`
 }
@@ -285,6 +301,8 @@ func (s *Server) apiIndex(w http.ResponseWriter, r *http.Request) {
 			"Mission has_current is authoritative: the no-mission sentinel is 65535 for nation logs and 0 for expansion logs.",
 			"Appearance models are resolved: char_look holds model ids, char_style holds item ids mapped through item_equipment.MId when style-locked.",
 			"Poll appearances and re-render only where hash changed.",
+			"Gear comes from char_equip_saved for the character's current main job, so it is the last set saved for that job rather than the live one.",
+			"Item names lose apostrophes: the database stores them stripped with no case seam to recover, so Kirin's Osode reads as Kirins Osode.",
 		},
 	})
 }
@@ -406,6 +424,23 @@ func (s *Server) apiCharacter(w http.ResponseWriter, r *http.Request) {
 	}
 	for i, h := range p.History {
 		detail.History[xidb.HistoryColumns[i].Column] = h.Value
+	}
+
+	if !p.Gear.Empty() {
+		gear := apiLoadout{
+			JobID: p.Gear.JobID, Job: p.Gear.Job, JobName: p.Gear.JobName,
+			Pieces:    make([]apiEquipPiece, 0, len(p.Gear.Pieces)),
+			OtherJobs: p.Gear.OtherJobs,
+		}
+		for _, pc := range p.Gear.Pieces {
+			gear.Pieces = append(gear.Pieces, apiEquipPiece{
+				Slot: pc.Slot, Label: pc.Label, ItemID: pc.ItemID, Name: pc.Name,
+			})
+		}
+		if gear.OtherJobs == nil {
+			gear.OtherJobs = []string{}
+		}
+		detail.Gear = &gear
 	}
 
 	if look, err := s.db.AppearanceOf(r.Context(), p.Name); err == nil {

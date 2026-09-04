@@ -39,7 +39,8 @@ FAILURES=0
 TABLES=(
     chars char_stats char_look char_history char_jobs char_exp
     char_job_points char_profile char_points char_skills char_inventory
-    char_style item_equipment skill_caps zone_settings accounts_sessions
+    char_style item_equipment char_equip_saved item_basic
+    skill_caps zone_settings accounts_sessions
 )
 
 cleanup() {
@@ -233,6 +234,29 @@ check 'player page shows craft tenths'  "$player" '96.4'
 check 'player page shows fame'          "$player" '9,999'
 check 'player page shows the record'    "$player" 'Distance travelled'
 check 'player page shows job points'    "$player" '1204 JP'
+
+# ---- equipment ------------------------------------------------------------
+# Read from char_equip_saved for the character's current main job, deliberately
+# not from char_equip: the live table only points into char_inventory, and
+# reading that would require granting itemId there.
+check 'gear section names the job'    "$player" 'Equipment &mdash; Samurai'
+check 'gear resolves an item name'    "$player" 'Hrafn Coronet'
+check 'gear resolves a second item'   "$player" 'Hexed Haubert'
+check 'gear labels the slot'          "$player" 'Head'
+refute 'empty slots are omitted'      "$player" '>Waist<'
+check 'other saved jobs are listed'   "$player" 'Sets also saved for'
+check 'and name the job'              "$player" 'DRK'
+
+apigear="$(curl -fsS "http://localhost:$PORT/api/v1/characters/Aldwyn")"
+check 'api reports gear'              "$apigear" '"job": "SAM"'
+check 'api reports an item id'        "$apigear" '"item_id": 10400'
+check 'api reports the item name'     "$apigear" '"name": "Hrafn Coronet"'
+check 'api lists other jobs'          "$apigear" '"other_jobs"'
+
+# The inventory boundary must stay closed: gear came from a table that holds
+# item ids directly, so nothing here should have needed inventory access.
+refute 'gear did not widen inventory' "$(cat "$ROOT/deploy/sql/grant.sql")" \
+    'SELECT (charid, location, slot, quantity, itemId)'
 
 # ---- missions -------------------------------------------------------------
 # chars.missions is a raw missionlog_t[15] blob. The fixture encodes one by

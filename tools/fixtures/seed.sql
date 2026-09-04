@@ -114,5 +114,14 @@ INSERT INTO char_style (charid, head, body, hands, legs, feet, main, sub, ranged
 
 UPDATE chars SET isstylelocked = 1 WHERE charid = 1;
 
+-- Saved equipment. Real item ids so the item_basic join is exercised against
+-- real data: 10400 hrafn_coronet, 10240 hexed_haubert, 10384 cumulus_masque.
+-- Aldwyn's main job is SAM (12); the DRK (8) row proves the other-jobs hint.
+INSERT INTO char_equip_saved
+  (charid, jobid, main, sub, ranged, ammo, head, body, hands, legs, feet, neck, waist, ear1, ear2, ring1, ring2, back) VALUES
+  (1, 12, 17440, 0, 0, 0, 10400, 10240, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+  (1,  8,     0, 0, 0, 0, 10384,     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+  (2,  3,     0, 0, 0, 0, 10384,     0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+
 -- Muunbeam is logged in right now.
 INSERT INTO accounts_sessions (accid, charid, targid) VALUES (1, 2, 100);

@@ -24,6 +24,13 @@ GRANT SELECT ON xidb.char_history     TO 'xiherald'@'%';
 GRANT SELECT ON xidb.char_style       TO 'xiherald'@'%';
 GRANT SELECT (itemId, MId) ON xidb.item_equipment TO 'xiherald'@'%';
 
+-- Saved equipment sets. char_equip_saved holds item ids directly, which is why
+-- it is used instead of char_equip: the live table only points into
+-- char_inventory, and reading that would mean granting itemId there and with it
+-- the ability to read every item every character owns.
+GRANT SELECT ON xidb.char_equip_saved TO 'xiherald'@'%';
+GRANT SELECT (itemid, name) ON xidb.item_basic TO 'xiherald'@'%';
+
 -- Reference tables for skill caps and zone names.
 GRANT SELECT ON xidb.skill_caps       TO 'xiherald'@'%';
 GRANT SELECT ON xidb.zone_settings    TO 'xiherald'@'%';

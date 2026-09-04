@@ -89,6 +89,26 @@
 </section>
 {{ end }}
 
+{{ with .Gear }}
+{{ if not .Empty }}
+<section class="panel">
+  <h2 class="section-title">Equipment &mdash; {{ .JobName }}</h2>
+  <div class="gear">
+  {{ range .Pieces }}
+    <div class="gear-slot">
+      <span class="gear-label">{{ .Label }}</span>
+      <span class="gear-item">{{ .Name }}</span>
+    </div>
+  {{ end }}
+  </div>
+  {{ with .OtherJobs }}
+  <p class="lede gear-other">Sets also saved for
+    {{ range $i, $j := . }}{{ if $i }}, {{ end }}{{ $j }}{{ end }}.</p>
+  {{ end }}
+</section>
+{{ end }}
+{{ end }}
+
 {{ with .StartedMissions }}
 <section class="panel">
   <h2 class="section-title">Missions</h2>
