@@ -20,7 +20,7 @@ points. All 22 job levels with job points. Combat, defensive and magic skills
 against their level-and-rank cap from `skill_caps`. Craft skills with synthesis
 rank and guild points. The full `char_history` record. Nation ranks and fame
 across all 15 fame areas. Mission standing per expansion, decoded from the
-`chars.missions` blob.
+`chars.missions` blob. Saved equipment for the current job.
 
 **Fun stats.** Twenty-one leaderboards in three groups. Combat covers kills,
 deaths, K/D, knockouts, battles, weapon skills, spells and abilities. Activity
@@ -161,6 +161,28 @@ changed gear.
 Renders use `VELLICHOR_MAGENTA` for a flat background that is keyed to
 transparency, so the backdrop comes from CSS. Restyling it costs nothing;
 baking a background into the PNGs would mean re-rendering everyone.
+
+## Equipment
+
+Read from `char_equip_saved`, keyed by `(charid, jobid)`, for the character's
+current main job. Empty slots are omitted, and the other jobs with saved sets
+are named so the page hints that more gear exists.
+
+**Not from `char_equip`, deliberately.** The live table stores only a container
+and slot, so the item id has to come from `char_inventory`. Reading it would
+mean granting the Herald `itemId` on that table, and with it the ability to read
+every item every character owns. `char_equip_saved` stores item ids directly and
+needs no inventory access at all. The trade is staleness for blast radius: this
+is the set LSB last saved for that job rather than the live one.
+
+**Item names lose their apostrophes.** `item_basic` stores them lowercased,
+underscored and stripped of punctuation, so `kirins_osode` is really "Kirin's
+Osode". Unlike zone names there is no case seam to recover from: `dOria` kept a
+capital letter and `kirins` does not. Nothing is guessed, because a possessive
+heuristic on a trailing 's' renders `brass_cap` as "Bras's Cap". So it reads as
+"Kirins Osode", wrong in a way a reader sees through rather than wrong in a way
+that looks authoritative. The punctuated names live in the client DATs, so
+fixing this properly means generating a name table from them.
 
 ## Mission decoding
 
