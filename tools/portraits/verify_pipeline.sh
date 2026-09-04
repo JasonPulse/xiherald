@@ -29,7 +29,8 @@ FAILURES=0
 TABLES=(
     chars char_stats char_look char_history char_jobs char_exp
     char_job_points char_profile char_points char_skills char_inventory
-    char_style item_equipment skill_caps zone_settings accounts_sessions
+    char_style item_equipment char_equip_saved item_basic
+    skill_caps zone_settings accounts_sessions
 )
 
 cleanup() {
