@@ -69,11 +69,13 @@ FROM mcr.microsoft.com/dotnet/runtime:8.0
 
 ARG GODOT_VERSION
 ARG TARGETARCH
+ARG RENDERER_VERSION
 
 # Unbuffered, because Python block-buffers stdout when it is not a tty. In a
 # Job that means no log output at all until the process exits, so a run that is
 # working normally is indistinguishable from one that is hung.
-ENV PYTHONUNBUFFERED=1 \
+ENV XI_RENDERER_VERSION=${RENDERER_VERSION} \
+    PYTHONUNBUFFERED=1 \
     DEBIAN_FRONTEND=noninteractive \
     LIBGL_ALWAYS_SOFTWARE=1 \
     GALLIUM_DRIVER=llvmpipe \
@@ -121,5 +123,12 @@ COPY render_portraits.py /app/
 COPY entrypoint.sh /usr/local/bin/entrypoint.sh
 
 RUN chmod +x /usr/local/bin/entrypoint.sh && mkdir -p /tmp/runtime && chmod 700 /tmp/runtime
+
+# The whole re-render mechanism hangs off this value. If it is missing the
+# renderer falls back to "dev", every stored hash still matches, and a real
+# renderer fix silently reaches nobody while the job reports success. That
+# happened once; failing the build is cheaper than discovering it in a log.
+RUN test -n "$XI_RENDERER_VERSION" -a "$XI_RENDERER_VERSION" != unknown \
+    || { echo "XI_RENDERER_VERSION is not set; build with build_image.sh" >&2; exit 1; }
 
 ENTRYPOINT ["/usr/local/bin/entrypoint.sh"]

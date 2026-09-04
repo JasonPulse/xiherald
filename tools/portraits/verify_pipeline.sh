@@ -138,6 +138,19 @@ again="$(docker run --rm --network "$NET" \
     --herald "http://$APP:8080" --db-host "$DB" 2>&1 | tail -2)"
 check 'unchanged characters are skipped' "$again" 'rendered 0'
 
+echo '== the image must carry a real renderer version'
+# Without this the renderer falls back to "dev", every stored hash matches, and
+# a genuine renderer fix reaches nobody while the job still reports success.
+# That is exactly what shipped once, so it is asserted rather than assumed.
+imgver="$(docker run --rm --entrypoint sh "$IMAGE" -c 'echo "$XI_RENDERER_VERSION"' 2>/dev/null | tr -d '\r\n')"
+if [[ -n "$imgver" && "$imgver" != dev && "$imgver" != unknown ]]; then
+    printf '  ok    image reports a renderer version (%s)\n' "$imgver"
+    PASSES=$((PASSES + 1))
+else
+    printf '  FAIL  image reports no renderer version (got %s)\n' "${imgver:-empty}"
+    FAILURES=$((FAILURES + 1))
+fi
+
 echo '== a renderer change must re-render everyone'
 # The whole point: a portrait is a function of appearance AND renderer. If the
 # renderer improves and nothing re-renders, the improvement never ships.
